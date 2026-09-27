@@ -1,0 +1,89 @@
+-- src/commonMain/sqldelight/com/ctos/client/db/AppDatabase.sq
+
+-- The signed-in user: at most one row, and the login token is kept here so the app opens signed in.
+CREATE TABLE session (
+  id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+  token TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  user_name TEXT NOT NULL,
+  user_email TEXT NOT NULL
+);
+
+-- What the local folder of each department held the last time it was looked at, so changes made
+-- while the app was closed can be found by comparing with the folder as it is now.
+CREATE TABLE local_file (
+  department_slug TEXT NOT NULL,
+  path TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  modified_at INTEGER NOT NULL,
+  PRIMARY KEY (department_slug, path)
+);
+
+-- What was the same on this device and on the server the last time a department was synced: for each
+-- file, the server's version and checksum, and the size and modification time the local file had then.
+-- A file that still looks like this has not been changed on this device; one whose server version
+-- has moved on has been changed by someone else. Folders have an empty checksum.
+CREATE TABLE sync_node (
+  department_slug TEXT NOT NULL,
+  path TEXT NOT NULL,
+  is_folder INTEGER NOT NULL,
+  version INTEGER NOT NULL,
+  checksum TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  modified_at INTEGER NOT NULL,
+  PRIMARY KEY (department_slug, path)
+);
+
+-- How far into each department's change log this device has read.
+CREATE TABLE sync_cursor (
+  department_slug TEXT NOT NULL PRIMARY KEY,
+  cursor INTEGER NOT NULL
+);
+
+getSession:
+SELECT * FROM session WHERE id = 1;
+
+saveSession:
+INSERT OR REPLACE INTO session (id, token, user_id, user_name, user_email)
+VALUES (1, ?, ?, ?, ?);
+
+clearSession:
+DELETE FROM session;
+
+getLocalFiles:
+SELECT * FROM local_file WHERE department_slug = ?;
+
+upsertLocalFile:
+INSERT OR REPLACE INTO local_file (department_slug, path, size, modified_at)
+VALUES (?, ?, ?, ?);
+
+deleteLocalFile:
+DELETE FROM local_file WHERE department_slug = ? AND path = ?;
+
+deleteLocalFiles:
+DELETE FROM local_file WHERE department_slug = ?;
+
+getSyncNodes:
+SELECT * FROM sync_node WHERE department_slug = ?;
+
+getSyncNode:
+SELECT * FROM sync_node WHERE department_slug = ? AND path = ?;
+
+upsertSyncNode:
+INSERT OR REPLACE INTO sync_node (department_slug, path, is_folder, version, checksum, size, modified_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteSyncNode:
+DELETE FROM sync_node WHERE department_slug = ? AND path = ?;
+
+deleteSyncNodes:
+DELETE FROM sync_node WHERE department_slug = ?;
+
+getSyncCursor:
+SELECT cursor FROM sync_cursor WHERE department_slug = ?;
+
+saveSyncCursor:
+INSERT OR REPLACE INTO sync_cursor (department_slug, cursor) VALUES (?, ?);
+
+deleteSyncCursor:
+DELETE FROM sync_cursor WHERE department_slug = ?;

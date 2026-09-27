@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Brand: a blue-violet scale. Change the hue (268) to re-skin the whole site. */
+    --color-brand-50: oklch(0.97 0.016 268);
+    --color-brand-100: oklch(0.94 0.035 268);
+    --color-brand-200: oklch(0.88 0.07 268);
+    --color-brand-300: oklch(0.79 0.12 268);
+    --color-brand-400: oklch(0.69 0.17 268);
+    --color-brand-500: oklch(0.6 0.21 268);
+    --color-brand-600: oklch(0.53 0.23 268);
+    --color-brand-700: oklch(0.46 0.21 268);
+    --color-brand-800: oklch(0.39 0.16 268);
+    --color-brand-900: oklch(0.33 0.12 268);
+    --color-brand-950: oklch(0.25 0.09 268);
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    ::selection {
+        background: var(--color-brand-200);
+        color: var(--color-brand-950);
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--color-brand-500);
+        outline-offset: 2px;
+    }
+
+    /* Inputs, selects and checkboxes already show focus with their own ring (see x-field and
+       similar) - adding the outline on top of that ring drew as a double border. */
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+        outline: none;
+    }
+}
+
+/* Native <details> menus and FAQ rows: hide the default marker. */
+summary {
+    list-style: none;
+}
+
+summary::-webkit-details-marker {
+    display: none;
+}

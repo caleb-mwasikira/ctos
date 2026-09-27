@@ -1,0 +1,221 @@
+package com.ctos.client.network
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+// The shapes the CTOS API (ctos_api, written in Go) sends and receives. A success is
+// {"data": ...}; an error is {"message": "...", "errors": {"field": ["..."]}}.
+
+@Serializable
+data class ApiResponse<T>(
+    val data: T? = null,
+    val message: String? = null,
+    val errors: Map<String, List<String>>? = null,
+)
+
+@Serializable
+data class LoginRequest(
+    val email: String,
+    val password: String,
+    /** What the token is called in the user's list of devices ("Alice's laptop"). */
+    @SerialName("device_name") val deviceName: String,
+)
+
+@Serializable
+data class ApiUser(
+    val id: Long,
+    val name: String,
+    val email: String,
+)
+
+@Serializable
+data class LoginData(
+    val token: String,
+    val user: ApiUser,
+)
+
+@Serializable
+data class RegisterRequest(
+    val name: String,
+    val email: String,
+    val password: String,
+    @SerialName("password_confirmation") val passwordConfirmation: String,
+)
+
+@Serializable
+data class RegisterData(val email: String)
+
+@Serializable
+data class VerifyEmailRequest(
+    val email: String,
+    val code: String,
+    @SerialName("device_name") val deviceName: String,
+)
+
+@Serializable
+data class ResendCodeRequest(val email: String)
+
+@Serializable
+data class ForgotPasswordRequest(val email: String)
+
+@Serializable
+data class ResetPasswordRequest(
+    val email: String,
+    val code: String,
+    val password: String,
+    @SerialName("password_confirmation") val passwordConfirmation: String,
+)
+
+@Serializable
+data class JoinRequest(
+    /** The department ID shown on the website; unique across every organization. */
+    val department: String,
+    val code: String,
+)
+
+/** An organization as the dashboard shows it: it may not have any departments yet. */
+@Serializable
+data class OrganizationSummaryDto(
+    val id: Long,
+    val name: String,
+    val slug: String,
+    @SerialName("department_count") val departmentCount: Int = 0,
+    @SerialName("is_owner") val isOwner: Boolean = false,
+)
+
+@Serializable
+data class CreateOrganizationRequest(val name: String)
+
+@Serializable
+data class ShareRequest(val email: String)
+
+/** The "data" of a successful share answer: whether an existing account was attached straight
+ * away (true) or an email invitation was sent instead (false). */
+@Serializable
+data class ShareResultData(val added: Boolean)
+
+@Serializable
+data class AccessCodeData(@SerialName("access_code") val accessCode: String)
+
+/** What came of sharing a department: [added] as above, and [message] the server's own words for
+ * what happened ("X now has access..." or "We emailed X..."), ready to show as-is. */
+data class ShareOutcome(val added: Boolean, val message: String)
+
+@Serializable
+data class OrganizationRef(
+    val id: Long,
+    val name: String,
+    val slug: String,
+)
+
+/** A department the signed-in user belongs to. [role] is "admin", "lead" or "member". */
+@Serializable
+data class Department(
+    val id: Long,
+    val name: String,
+    val slug: String,
+    val organization: OrganizationRef,
+    val role: String,
+)
+
+/** One of the people in a department. [email] is only sent to people who manage the department. */
+@Serializable
+data class DepartmentMember(
+    val id: Long,
+    val name: String,
+    val role: String,
+    val email: String? = null,
+) {
+    val departmentRole: DepartmentRole get() = DepartmentRole.fromApi(role)
+}
+
+/** Someone who was sent a share link but has not joined yet. */
+@Serializable
+data class DepartmentInvitation(
+    val id: Long,
+    val email: String,
+)
+
+/**
+ * A department with what its page on the website shows: the members and, for people who manage
+ * the department, its access code and the invitations that are still open.
+ */
+@Serializable
+data class DepartmentDetails(
+    val id: Long,
+    val name: String,
+    val slug: String,
+    val organization: OrganizationRef,
+    val role: String,
+    @SerialName("member_count") val memberCount: Int = 0,
+    val members: List<DepartmentMember> = emptyList(),
+    @SerialName("can_manage") val canManage: Boolean = false,
+    @SerialName("access_code") val accessCode: String? = null,
+    val invitations: List<DepartmentInvitation> = emptyList(),
+)
+
+/**
+ * A file or folder of a department, as the server knows it. [path] is relative to the department.
+ * [version] goes up by one with every change; a deleted node stays as a tombstone so devices that
+ * were offline learn about it.
+ */
+@Serializable
+data class RemoteNode(
+    val id: Long,
+    val path: String,
+    val type: String,
+    val size: Long = 0,
+    val checksum: String? = null,
+    val version: Long,
+    /** Milliseconds since 1970. */
+    @SerialName("modified_at") val modifiedAt: Long? = null,
+    val deleted: Boolean = false,
+) {
+    val isFolder: Boolean get() = type == "folder"
+}
+
+/** A page of the change log. Ask again from [cursor] for what came after, while [more] is true and later too. */
+@Serializable
+data class ChangesPage(
+    val nodes: List<RemoteNode>,
+    val cursor: Long,
+    val more: Boolean = false,
+)
+
+@Serializable
+data class CreateFolderRequest(val path: String)
+
+/** {"message": "...", "current": {...}}: the answer to a change based on a version that is no longer the latest. */
+@Serializable
+data class ConflictAnswer(
+    val message: String? = null,
+    val current: RemoteNode? = null,
+)
+
+/**
+ * A nudge pushed down the /ws connection, for example
+ * {"type": "department.changed", "data": {"department_id": 7, "cursor": 4812}}.
+ * It never carries file data: the app reacts by asking the API what changed.
+ */
+@Serializable
+data class WsEvent(
+    val type: String,
+    val data: JsonObject? = null,
+) {
+    val departmentId: Long? get() = data?.get("department_id")?.jsonPrimitive?.content?.toLongOrNull()
+}
+
+/** What a department's role means for the person who has it. */
+enum class DepartmentRole(val label: String, val canManage: Boolean) {
+    Admin("Admin", true),
+    Lead("Lead", true),
+    Member("Member", false);
+
+    companion object {
+        fun fromApi(value: String): DepartmentRole = entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: Member
+    }
+}
+
+val Department.departmentRole: DepartmentRole get() = DepartmentRole.fromApi(role)
