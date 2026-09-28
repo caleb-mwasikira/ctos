@@ -93,11 +93,17 @@ it('answers not found for a folder that does not exist, is deleted, or is really
 
 // ── polling for live updates ────────────────────────────────────────────────
 
+/** The poll request the department page's own JS makes; a plain visit sends no such header. */
+function poll(mixed $test, string $url)
+{
+    return $test->withHeaders(['X-Explorer-Poll' => '1'])->get($url);
+}
+
 it('serves just the file list, for the department page to poll', function () {
     addNode($this->department, 'reports', 'folder');
     addNode($this->department, 'top-level.txt', content: 'top');
 
-    $response = $this->actingAs($this->member)->get(route('departments.explorer', $this->department));
+    $response = poll($this->actingAs($this->member), route('departments.explorer', $this->department));
 
     $response->assertOk()->assertSee('reports')->assertSee('top-level.txt');
     $response->assertDontSee('<html', false)->assertDontSee($this->department->organization->name);
@@ -108,21 +114,30 @@ it('polls a folder the same way it is browsed, and obeys the same rules', functi
     addNode($this->department, 'reports/summary.md', content: '# hi');
     addNode($this->department, 'top-level.txt', content: 'top');
 
-    $this->actingAs($this->member)
-        ->get(route('departments.explorer', ['department' => $this->department, 'path' => 'reports']))
+    $this->actingAs($this->member);
+
+    poll($this, route('departments.explorer', ['department' => $this->department, 'path' => 'reports']))
         ->assertOk()->assertSee('summary.md')->assertDontSee('top-level.txt');
 
-    $this->actingAs($this->member)
-        ->get(route('departments.explorer', ['department' => $this->department, 'path' => 'nope']))
+    poll($this, route('departments.explorer', ['department' => $this->department, 'path' => 'nope']))
         ->assertNotFound();
 });
 
 it('does not let outsiders or guests poll a department they cannot see', function () {
     $url = route('departments.explorer', $this->department);
 
-    $this->actingAs(User::factory()->create())->get($url)->assertForbidden();
+    $this->actingAs(User::factory()->create());
+    poll($this, $url)->assertForbidden();
     auth()->logout();
-    $this->get($url)->assertRedirect(route('login'));
+    poll($this, $url)->assertRedirect(route('login'));
+});
+
+it('sends a plain visit to the real page instead of a bare, unstyled fragment', function () {
+    addNode($this->department, 'reports', 'folder');
+
+    $this->actingAs($this->member)
+        ->get(route('departments.explorer', ['department' => $this->department, 'path' => 'reports']))
+        ->assertRedirect(route('departments.show', ['department' => $this->department, 'path' => 'reports']));
 });
 
 // ── opening a file in the browser ───────────────────────────────────────────

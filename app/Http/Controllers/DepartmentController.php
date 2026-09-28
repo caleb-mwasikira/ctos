@@ -94,13 +94,19 @@ class DepartmentController extends Controller
 
     /**
      * Just the file list, for the department page to poll (resources/js/app.js) so a file someone
-     * else adds or changes elsewhere shows up here without a reload.
+     * else adds or changes elsewhere shows up here without a reload. It answers only that poll
+     * (marked by its own header): a plain visit β€” typed in, bookmarked, opened from history β€” gets
+     * sent to the real page instead of a bare, unstyled fragment with no head or CSS.
      */
-    public function explorer(Request $request, Department $department): View
+    public function explorer(Request $request, Department $department): View|RedirectResponse
     {
         Gate::authorize('view', $department);
 
         $path = $this->pathFromRequest($request, $department);
+
+        if (! $request->hasHeader('X-Explorer-Poll')) {
+            return redirect()->route('departments.show', ['department' => $department, 'path' => $path ?: null]);
+        }
 
         return view('departments.partials.explorer', [
             'path' => $path,

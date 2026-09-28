@@ -103,7 +103,7 @@ document.querySelectorAll('[data-explorer]').forEach((section) => {
 
         let html;
         try {
-            const response = await fetch(url, { headers: { Accept: 'text/html' } });
+            const response = await fetch(url, { headers: { Accept: 'text/html', 'X-Explorer-Poll': '1' } });
 
             if (!response.ok) {
                 return;
