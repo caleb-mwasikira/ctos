@@ -310,9 +310,9 @@ private fun YourKeyCard(state: SecureDropKeyState.Ready, onShowFingerprint: () -
                 style = CtosText.Caption,
                 color = CtosColors.TextSubtle,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SecondaryButton("Copy my encrypted key", onCopyKey, icon = Icons.Default.Download)
-                DangerButton("Remove my key", onRemoveKey)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton("Copy my encrypted key", onCopyKey, modifier = Modifier.fillMaxWidth(), icon = Icons.Default.Download)
+                DangerButton("Remove my key", onRemoveKey, modifier = Modifier.fillMaxWidth())
             }
         }
     }
