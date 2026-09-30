@@ -165,6 +165,26 @@ function downloadTextFile(filename, text) {
     URL.revokeObjectURL(url);
 }
 
+// ── the Sent / Received tabs ───────────────────────────────────────────────
+
+document.querySelectorAll('[data-drop-tab]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('[data-drop-tab]').forEach((other) => {
+            const selected = other === tab;
+            other.setAttribute('aria-selected', String(selected));
+            other.classList.toggle('bg-white', selected);
+            other.classList.toggle('dark:bg-slate-900', selected);
+            other.classList.toggle('shadow-sm', selected);
+            other.classList.toggle('text-slate-500', !selected);
+            other.classList.toggle('dark:text-slate-400', !selected);
+        });
+        document.querySelectorAll('[data-drop-panel]').forEach((panel) => {
+            panel.classList.toggle('hidden', panel.dataset.dropPanel !== tab.dataset.dropTab);
+        });
+    });
+});
+document.querySelector('[data-drop-tab="sent"]')?.classList.add('bg-white', 'dark:bg-slate-900', 'shadow-sm');
+
 // ── opening a received (or sent) drop ────────────────────────────────────────
 
 const openDialog = document.getElementById('open-drop-dialog');

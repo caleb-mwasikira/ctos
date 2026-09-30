@@ -71,11 +71,13 @@
         </x-card>
     @else
         <div class="grid gap-8 lg:grid-cols-3">
-            <div class="space-y-8 lg:col-span-2">
-                <section aria-labelledby="sent-heading">
-                    <div class="mb-3 flex items-center justify-between">
-                        <h2 id="sent-heading" class="text-lg font-semibold">Sent</h2>
-                    </div>
+            <div class="lg:col-span-2">
+                <div class="flex gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist">
+                    <button type="button" data-drop-tab="sent" class="flex-1 rounded-lg px-3 py-2 text-sm font-medium" aria-selected="true">Sent</button>
+                    <button type="button" data-drop-tab="received" class="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400" aria-selected="false">Received</button>
+                </div>
+
+                <section data-drop-panel="sent" class="mt-5">
                     @if ($sent->isEmpty())
                         <x-card class="flex flex-col items-center py-10 text-center">
                             <p class="text-sm text-slate-600 dark:text-slate-400">Nothing sent yet. Open a department to send one, encrypted.</p>
@@ -101,8 +103,7 @@
                     @endif
                 </section>
 
-                <section aria-labelledby="received-heading">
-                    <h2 id="received-heading" class="mb-3 text-lg font-semibold">Received</h2>
+                <section data-drop-panel="received" class="mt-5 hidden">
                     @if ($received->isEmpty())
                         <x-card class="flex flex-col items-center py-10 text-center">
                             <p class="text-sm text-slate-600 dark:text-slate-400">Nothing has been sent to you yet.</p>

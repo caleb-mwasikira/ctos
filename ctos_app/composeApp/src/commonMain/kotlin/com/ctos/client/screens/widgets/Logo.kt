@@ -1,6 +1,7 @@
 package com.ctos.client.screens.widgets
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -25,10 +26,18 @@ import com.ctos.client.theme.CtosText
  * The ctOS wordmark: a folder icon on a brand-500-to-brand-700 gradient tile, then the name —
  * exactly `resources/views/components/logo.blade.php`, which this always matches (that gradient
  * and this icon are the one place the website's own dark: mode does not change it either).
+ *
+ * [onClick], when given, matches the website's own header logo — wrapped in a plain `<a
+ * href="{{ route('dashboard') }}">` — rather than adding a link concept the app has no other use
+ * for.
  */
 @Composable
-fun Logo(modifier: Modifier = Modifier, iconSize: Dp = 32.dp, textStyle: TextStyle = CtosText.SectionTitle, textColor: Color = CtosColors.Text) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+fun Logo(modifier: Modifier = Modifier, iconSize: Dp = 32.dp, textStyle: TextStyle = CtosText.SectionTitle, textColor: Color = CtosColors.Text, onClick: (() -> Unit)? = null) {
+    Row(
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Box(
             modifier = Modifier.size(iconSize).background(Brush.linearGradient(listOf(CtosColors.Primary500, CtosColors.Primary700)), CtosShapes.Field),
             contentAlignment = Alignment.Center,

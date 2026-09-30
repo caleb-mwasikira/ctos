@@ -82,7 +82,7 @@ fun AppShell(
             // A full-width header above everything else, the same as the website's own <header>:
             // the logo (or a back arrow and the screen's title, in its place, while inside one),
             // search, and the account menu.
-            Header(title, canGoBack, onBack, onSearch, userName, userEmail, onLogout)
+            Header(title, canGoBack, onBack, onSearch, userName, userEmail, onLogout, onLogoClick = { onNavigate(Screen.Dashboard) })
             if (wide) {
                 Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     Sidebar(current, onNavigate)
@@ -140,6 +140,7 @@ private fun Header(
     userName: String,
     userEmail: String,
     onLogout: () -> Unit,
+    onLogoClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().height(64.dp).background(CtosColors.Surface).padding(horizontal = 16.dp),
@@ -150,7 +151,7 @@ private fun Header(
             Spacer(Modifier.width(4.dp))
             Text(title, style = CtosText.SectionTitle, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         } else {
-            Logo()
+            Logo(onClick = onLogoClick)
             Spacer(Modifier.weight(1f))
         }
         IconAction(Icons.Default.Search, "Search", onSearch)

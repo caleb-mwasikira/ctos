@@ -39,7 +39,6 @@ import com.ctos.client.screens.widgets.LinkButton
 import com.ctos.client.screens.widgets.Page
 import com.ctos.client.screens.widgets.PrimaryButton
 import com.ctos.client.screens.widgets.SecondaryButton
-import com.ctos.client.screens.widgets.SectionTitle
 import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
@@ -115,12 +114,13 @@ fun SecureDropContent(
                     )
                     is SecureDropKeyState.Ready -> {
                         val main: @Composable (Modifier) -> Unit = { modifier ->
-                            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                                SectionTitle("Sent")
-                                SecureDropRows(lists.sent, empty = "Nothing sent yet.", onOpenDrop, onDeleteDrop, ownedByMe = true)
-
-                                SectionTitle("Received")
-                                SecureDropRows(lists.received, empty = "Nothing has been sent to you yet.", onOpenDrop, onDeleteDrop, ownedByMe = false)
+                            var tab by remember { mutableStateOf(DropTab.Sent) }
+                            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                DropTabBar(tab, onSelect = { tab = it })
+                                when (tab) {
+                                    DropTab.Sent -> SecureDropRows(lists.sent, empty = "Nothing sent yet.", onOpenDrop, onDeleteDrop, ownedByMe = true)
+                                    DropTab.Received -> SecureDropRows(lists.received, empty = "Nothing has been sent to you yet.", onOpenDrop, onDeleteDrop, ownedByMe = false)
+                                }
                             }
                         }
                         val side: @Composable (Modifier) -> Unit = { modifier ->
@@ -344,6 +344,34 @@ private fun DepartmentRow(department: Department, onSend: (Department) -> Unit) 
     ) {
         Text(department.name, style = CtosText.Small, color = CtosColors.Text, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = CtosColors.TextSubtle, modifier = Modifier.padding(start = 4.dp))
+    }
+}
+
+private enum class DropTab { Sent, Received }
+
+/** A segmented control, the same shape as the website's own Sent/Received tab bar. */
+@Composable
+private fun DropTabBar(selected: DropTab, onSelect: (DropTab) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(CtosColors.SurfaceAlt, CtosShapes.Control).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        DropTab.entries.forEach { tab ->
+            val isSelected = tab == selected
+            Box(
+                modifier = Modifier.weight(1f)
+                    .background(if (isSelected) CtosColors.Surface else CtosColors.SurfaceAlt, CtosShapes.Field)
+                    .clickable(onClick = { onSelect(tab) })
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (tab == DropTab.Sent) "Sent" else "Received",
+                    style = if (isSelected) CtosText.SmallStrong else CtosText.Small,
+                    color = if (isSelected) CtosColors.Text else CtosColors.TextSubtle,
+                )
+            }
+        }
     }
 }
 
