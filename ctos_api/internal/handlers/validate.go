@@ -73,7 +73,7 @@ func validateNewPassword(password, confirmation string) string {
 }
 
 // validateVerificationCode: the app only ever sends back exactly what it was emailed, so this
-// just checks something was typed β€” whether it is the right code is decided next, by comparing
+// just checks something was typed — whether it is the right code is decided next, by comparing
 // with the stored hash.
 func validateVerificationCode(code string) string {
 	if strings.TrimSpace(code) == "" {

@@ -165,6 +165,18 @@ func (api *testAPI) do(method string, path string, token string, body any) (int,
 	return response.Code, decoded
 }
 
+// doRaw is do, for an answer that is not JSON (a downloaded file).
+func (api *testAPI) doRaw(method string, path string, token string) (int, string) {
+	api.t.Helper()
+	request := httptest.NewRequest(method, path, nil)
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response := httptest.NewRecorder()
+	api.routes.ServeHTTP(response, request)
+	return response.Code, response.Body.String()
+}
+
 // login signs in and returns the status and, when it worked, the token.
 func (api *testAPI) login(email string, password string) (int, string) {
 	api.t.Helper()

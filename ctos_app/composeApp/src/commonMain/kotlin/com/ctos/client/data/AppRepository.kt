@@ -6,6 +6,7 @@ import com.ctos.client.deviceName
 import com.ctos.client.network.CtosApi
 import com.ctos.client.network.Department
 import com.ctos.client.network.DepartmentDetails
+import com.ctos.client.network.EncryptionKeyStatus
 import com.ctos.client.network.JoinRequest
 import com.ctos.client.network.LoginData
 import com.ctos.client.network.LoginRequest
@@ -13,7 +14,12 @@ import com.ctos.client.network.OrganizationSummaryDto
 import com.ctos.client.network.RegisterData
 import com.ctos.client.network.RegisterRequest
 import com.ctos.client.network.ResetPasswordRequest
+import com.ctos.client.network.SecureDropDetails
+import com.ctos.client.network.SecureDropLists
+import com.ctos.client.network.SecureDropRecipientOption
+import com.ctos.client.network.SecureDropRecipientUpload
 import com.ctos.client.network.VerifyEmailRequest
+import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -101,6 +107,31 @@ object AppRepository {
     suspend fun fetchDepartmentDetails(slug: String): Result<DepartmentDetails> = withContext(Dispatchers.IO) { api.getDepartmentDetails(slug) }
 
     suspend fun leaveDepartment(slug: String): Result<Unit> = withContext(Dispatchers.IO) { api.leaveDepartment(slug) }
+
+    // ── Secure Drop (docs/secure-drop.md): end-to-end encrypted files between department members ──
+
+    suspend fun secureDropChallenge(publicKeyPem: String): Result<String> = withContext(Dispatchers.IO) { api.secureDropChallenge(publicKeyPem) }
+
+    suspend fun storeEncryptionKey(proof: String, encryptedPrivateKey: String): Result<Unit> = withContext(Dispatchers.IO) { api.storeEncryptionKey(proof, encryptedPrivateKey) }
+
+    suspend fun encryptionKeyStatus(): Result<EncryptionKeyStatus?> = withContext(Dispatchers.IO) { api.getEncryptionKeyStatus() }
+
+    suspend fun downloadEncryptionKey(): Result<String> = withContext(Dispatchers.IO) { api.downloadEncryptionKey() }
+
+    suspend fun deleteEncryptionKey(): Result<Unit> = withContext(Dispatchers.IO) { api.deleteEncryptionKey() }
+
+    suspend fun secureDropRecipients(slug: String): Result<List<SecureDropRecipientOption>> = withContext(Dispatchers.IO) { api.getSecureDropRecipients(slug) }
+
+    suspend fun secureDrops(): Result<SecureDropLists> = withContext(Dispatchers.IO) { api.getSecureDrops() }
+
+    suspend fun sendSecureDrop(slug: String, name: String, iv: String, ciphertext: ByteArray, recipients: List<SecureDropRecipientUpload>): Result<Long> =
+        withContext(Dispatchers.IO) { api.storeSecureDrop(slug, name, iv, ciphertext, recipients) }
+
+    suspend fun secureDropDetails(id: Long): Result<SecureDropDetails> = withContext(Dispatchers.IO) { api.getSecureDrop(id) }
+
+    suspend fun downloadSecureDrop(id: Long, sink: suspend (ByteReadChannel) -> Unit): Result<Unit> = withContext(Dispatchers.IO) { api.downloadSecureDrop(id, sink) }
+
+    suspend fun deleteSecureDrop(id: Long): Result<Unit> = withContext(Dispatchers.IO) { api.deleteSecureDrop(id) }
 
     // ── what the sync knows ────────────────────────────────────────────────
 

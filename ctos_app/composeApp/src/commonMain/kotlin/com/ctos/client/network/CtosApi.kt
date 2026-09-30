@@ -9,6 +9,8 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.delete
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -20,6 +22,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
@@ -35,6 +38,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /** The content of a file, handed over piece by piece so a big file is never held in memory. */
@@ -344,6 +348,116 @@ class CtosApi(
                 }
             }
         }
+    }
+
+    // ── Secure Drop (docs/secure-drop.md) ────────────────────────────────────
+
+    /** Step one of setting up a key pair: a nonce encrypted with the device's public key. */
+    suspend fun secureDropChallenge(publicKeyPem: String): Result<String> =
+        call(EncryptionKeyChallengeData.serializer()) {
+            client.post("$baseUrl/encryption-keys/challenge") {
+                authorize()
+                contentType(ContentType.Application.Json)
+                setBody(EncryptionKeyChallengeRequest(publicKeyPem))
+            }
+        }.map { it.ciphertext }
+
+    /** Step two: proves the challenge was decrypted, then stores the key pair. */
+    suspend fun storeEncryptionKey(proof: String, encryptedPrivateKey: String): Result<Unit> = callForNothing {
+        client.post("$baseUrl/encryption-keys") {
+            authorize()
+            contentType(ContentType.Application.Json)
+            setBody(StoreEncryptionKeyRequest(proof, encryptedPrivateKey))
+        }
+    }
+
+    /** null when no key is set up yet, rather than a failure. */
+    suspend fun getEncryptionKeyStatus(): Result<EncryptionKeyStatus?> = try {
+        val response = client.get("$baseUrl/encryption-keys") { authorize() }
+        when {
+            response.status == HttpStatusCode.NotFound -> Result.success(null)
+            response.status.isSuccess() -> Result.success(ctosJson.decodeFromString(ApiResponse.serializer(EncryptionKeyStatus.serializer()), response.bodyAsText()).data)
+            else -> Result.failure(failure(response, isLogin = false))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e.asApiException())
+    }
+
+    /** The caller's own encrypted private key PEM, to decrypt locally with the passphrase. */
+    suspend fun downloadEncryptionKey(): Result<String> = try {
+        val response = client.get("$baseUrl/encryption-keys/download") { authorize() }
+        if (response.status.isSuccess()) Result.success(response.bodyAsText()) else Result.failure(failure(response, isLogin = false))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e.asApiException())
+    }
+
+    suspend fun deleteEncryptionKey(): Result<Unit> = callForNothing {
+        client.delete("$baseUrl/encryption-keys") { authorize() }
+    }
+
+    /** Department members who have a Secure Drop key: their public key, to wrap a file's AES key for them. */
+    suspend fun getSecureDropRecipients(slug: String): Result<List<SecureDropRecipientOption>> =
+        call(ListSerializer(SecureDropRecipientOption.serializer())) {
+            client.get("$baseUrl/departments/$slug/secure-drop-recipients") { authorize() }
+        }
+
+    suspend fun getSecureDrops(): Result<SecureDropLists> = call(SecureDropLists.serializer()) {
+        client.get("$baseUrl/secure-drops") { authorize() }
+    }
+
+    /** Sends one already-encrypted file: [ciphertext] and every recipient's wrapped copy of its key. */
+    suspend fun storeSecureDrop(
+        slug: String,
+        name: String,
+        iv: String,
+        ciphertext: ByteArray,
+        recipients: List<SecureDropRecipientUpload>,
+    ): Result<Long> = call(SecureDropIdData.serializer()) {
+        client.submitFormWithBinaryData(
+            url = "$baseUrl/departments/$slug/secure-drop",
+            formData = formData {
+                append("name", name)
+                append("iv", iv)
+                append("recipients", ctosJson.encodeToString(ListSerializer(SecureDropRecipientUpload.serializer()), recipients))
+                append("ciphertext", ciphertext, Headers.build {
+                    append(HttpHeaders.ContentType, "application/octet-stream")
+                    append(HttpHeaders.ContentDisposition, "filename=\"ciphertext\"")
+                })
+            },
+        ) { authorize() }
+    }.map { it.id }
+
+    /** What is needed to decrypt a drop: its nonce and the caller's own wrapped key. */
+    suspend fun getSecureDrop(id: Long): Result<SecureDropDetails> = call(SecureDropDetails.serializer()) {
+        client.get("$baseUrl/secure-drops/$id") { authorize() }
+    }
+
+    suspend fun downloadSecureDrop(id: Long, sink: suspend (ByteReadChannel) -> Unit): Result<Unit> = try {
+        client.prepareGet("$baseUrl/secure-drops/$id/download") { authorize() }.execute { response ->
+            if (!response.status.isSuccess()) throw failure(response, isLogin = false)
+            try {
+                sink(response.bodyAsChannel())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw RejectedContent(e)
+            }
+        }
+        Result.success(Unit)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RejectedContent) {
+        Result.failure(e.cause ?: e)
+    } catch (e: Exception) {
+        Result.failure(e.asApiException())
+    }
+
+    suspend fun deleteSecureDrop(id: Long): Result<Unit> = callForNothing {
+        client.delete("$baseUrl/secure-drops/$id") { authorize() }
     }
 
     private suspend fun <T> call(

@@ -4,6 +4,7 @@
         ['dashboard', route('dashboard'), 'home', 'Dashboard'],
         ['organizations.*', route('organizations.index'), 'building', 'Organizations'],
         ['departments.*', route('departments.index'), 'folder', 'Departments'],
+        ['secure-drop.*', route('secure-drop.index'), 'lock', 'Secure Drop'],
         ['downloads', route('downloads'), 'download', 'Apps'],
     ];
 @endphp

@@ -72,7 +72,7 @@ private val DarkPalette = Palette(
 /**
  * The design tokens of the app: one palette, one type scale, one set of shapes. Screens and
  * widgets take every color, size and radius from here instead of writing their own numbers, so
- * the app looks like one product, and like the website β€” including its dark mode: [AppTheme]
+ * the app looks like one product, and like the website — including its dark mode: [AppTheme]
  * switches every value here to match the system, the same way the website's `dark:` classes do.
  *
  * Every property is backed by [mutableStateOf], so a screen that reads e.g. `CtosColors.Canvas`
@@ -145,7 +145,7 @@ object CtosShapes {
  * platform's native system font instead, which is already installed, renders instantly with no
  * download or bundled font file, and looks at home next to every other app on that device. A
  * website and a native app are different mediums, so "styled like the website" (the color palette
- * above, the same brand and layout language) stops at typeface β€” matching fonts pixel-for-pixel
+ * above, the same brand and layout language) stops at typeface — matching fonts pixel-for-pixel
  * would need shipping Instrument Sans as a font resource for comparatively little benefit.
  */
 /**
@@ -189,7 +189,7 @@ private val CtosTypography = Typography(
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     // Always dark, matching the website's own dark: palette, the same way it would look with the
-    // OS set to dark mode β€” not tied to system detection: Compose Desktop's isSystemInDarkTheme()
+    // OS set to dark mode — not tied to system detection: Compose Desktop's isSystemInDarkTheme()
     // does not reliably read the actual OS setting on every platform (notably Linux desktops),
     // so a build that depended on it could silently stay light no matter what the system said.
     CtosColors.useDark(true)

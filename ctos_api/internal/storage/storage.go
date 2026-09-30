@@ -127,3 +127,61 @@ func (store *Store) Remove(key string) {
 	}
 	os.Remove(filepath.Join(store.root, filepath.FromSlash(key)))
 }
+
+// SaveSecureDrop is exactly Save, except a Secure Drop's ciphertext (see docs/secure-drop.md) is
+// not a department node: its key is "secure-drops/{random}", the same shape the website's own
+// Storage::disk('local')->put('secure-drops/...') writes, in the same shared folder.
+func (store *Store) SaveSecureDrop(content io.Reader, maxBytes int64) (Saved, error) {
+	directory := filepath.Join(store.root, "secure-drops")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return Saved{}, err
+	}
+
+	temporary, err := os.CreateTemp(directory, ".upload-*")
+	if err != nil {
+		return Saved{}, err
+	}
+	defer os.Remove(temporary.Name())
+
+	hash := sha256.New()
+	size, err := io.Copy(io.MultiWriter(temporary, hash), io.LimitReader(content, maxBytes+1))
+	if closeErr := temporary.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return Saved{}, err
+	}
+	if size > maxBytes {
+		return Saved{}, ErrTooLarge
+	}
+
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return Saved{}, err
+	}
+	key := "secure-drops/" + hex.EncodeToString(random)
+
+	if err := os.Chmod(temporary.Name(), 0o644); err != nil {
+		return Saved{}, err
+	}
+	if err := os.Rename(temporary.Name(), filepath.Join(store.root, key)); err != nil {
+		return Saved{}, err
+	}
+	return Saved{Key: key, Size: size, SHA256: hex.EncodeToString(hash.Sum(nil))}, nil
+}
+
+// OpenSecureDrop opens a Secure Drop's ciphertext by its storage_path.
+func (store *Store) OpenSecureDrop(key string) (*os.File, error) {
+	if !strings.HasPrefix(key, "secure-drops/") || strings.Contains(key, "..") {
+		return nil, os.ErrNotExist
+	}
+	return os.Open(filepath.Join(store.root, filepath.FromSlash(key)))
+}
+
+// RemoveSecureDrop deletes a Secure Drop's ciphertext. Content that is already gone is not an error.
+func (store *Store) RemoveSecureDrop(key string) {
+	if !strings.HasPrefix(key, "secure-drops/") || strings.Contains(key, "..") {
+		return
+	}
+	os.Remove(filepath.Join(store.root, filepath.FromSlash(key)))
+}

@@ -32,6 +32,10 @@ type App struct {
 
 	// How many times each user has shared a department by email in the last hour.
 	ShareAttempts hourlyLimiter
+
+	// A not-yet-trusted Secure Drop public key's proof-of-possession nonce, briefly, per user
+	// (see docs/secure-drop.md). The zero value is ready to use.
+	SecureDropChallenges pendingChallenges
 }
 
 // shareAttemptsPerHour matches the website's own "department-share" rate limit.

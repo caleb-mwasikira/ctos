@@ -57,6 +57,7 @@ val Screen.navigationRoot: Screen
     get() = when (this) {
         Screen.OrganizationDetail -> Screen.Dashboard
         Screen.DepartmentDetail, Screen.DepartmentMembers, Screen.DepartmentAccessCode, Screen.DepartmentInvitations, Screen.DepartmentLeave -> Screen.Departments
+        Screen.SecureDropSend -> Screen.SecureDrop
         else -> this
     }
 

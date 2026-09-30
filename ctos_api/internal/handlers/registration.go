@@ -84,7 +84,7 @@ func (app *App) checkCode(ctx context.Context, email, purpose, code string) (ok 
 }
 
 // register: POST /api/v1/auth/register  {"name", "email", "password", "password_confirmation"}
-// Creates the account, unverified, and emails a code to confirm the address β€” matching
+// Creates the account, unverified, and emails a code to confirm the address — matching
 // RegisteredUserController on the website, other than the code instead of a signed link. No
 // token is issued yet: login (and this API's other routes) refuse an unverified account, so the
 // app calls POST /auth/verify-email next to finish signing in.
@@ -148,7 +148,7 @@ func (app *App) register(w http.ResponseWriter, r *http.Request) {
 
 // verifyEmail: POST /api/v1/auth/verify-email  {"email", "code", "device_name"}
 // Confirms the address and, since only a verified account may sign in, logs the app straight in
-// with a fresh token β€” the code did what opening the emailed link does on the website.
+// with a fresh token — the code did what opening the emailed link does on the website.
 func (app *App) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email      string `json:"email"`
@@ -252,7 +252,7 @@ func (app *App) resendVerificationCode(w http.ResponseWriter, r *http.Request) {
 
 // forgotPassword: POST /api/v1/auth/forgot-password  {"email"}
 // Always answers the same way whether or not the address belongs to an account, so it cannot be
-// used to find out who is registered β€” matches PasswordResetLinkController on the website.
+// used to find out who is registered — matches PasswordResetLinkController on the website.
 func (app *App) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email string `json:"email"`

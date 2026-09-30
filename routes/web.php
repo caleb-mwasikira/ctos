@@ -15,8 +15,10 @@ use App\Http\Controllers\DepartmentInvitationController;
 use App\Http\Controllers\DepartmentMemberController;
 use App\Http\Controllers\DepartmentMemberLockController;
 use App\Http\Controllers\DepartmentMembershipController;
+use App\Http\Controllers\EncryptionKeyController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\OrganizationMemberLockController;
+use App\Http\Controllers\SecureDropController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'pages.home')->name('home');
@@ -107,5 +109,26 @@ Route::middleware('auth')->group(function () {
             ->name('departments.membership.edit');
         Route::delete('/departments/{department}/membership', [DepartmentMembershipController::class, 'destroy'])
             ->name('departments.membership.destroy');
+
+        // Secure Drop: end-to-end encrypted files between department members (docs/secure-drop.md).
+        Route::post('/secure-drop/keys/challenge', [EncryptionKeyController::class, 'challenge'])
+            ->name('secure-drop.keys.challenge');
+        Route::post('/secure-drop/keys', [EncryptionKeyController::class, 'store'])
+            ->name('secure-drop.keys.store');
+        Route::get('/secure-drop/keys/download', [EncryptionKeyController::class, 'download'])
+            ->name('secure-drop.keys.download');
+        Route::delete('/secure-drop/keys', [EncryptionKeyController::class, 'destroy'])
+            ->name('secure-drop.keys.destroy');
+
+        Route::get('/secure-drop', [SecureDropController::class, 'index'])->name('secure-drop.index');
+        Route::get('/departments/{department}/secure-drop/create', [SecureDropController::class, 'create'])
+            ->name('secure-drop.create');
+        Route::post('/departments/{department}/secure-drop', [SecureDropController::class, 'store'])
+            ->name('secure-drop.store');
+        Route::get('/secure-drop/{secureDrop}', [SecureDropController::class, 'show'])->name('secure-drop.show');
+        Route::get('/secure-drop/{secureDrop}/download', [SecureDropController::class, 'download'])
+            ->name('secure-drop.download');
+        Route::delete('/secure-drop/{secureDrop}', [SecureDropController::class, 'destroy'])
+            ->name('secure-drop.destroy');
     });
 });

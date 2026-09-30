@@ -24,7 +24,7 @@ import com.ctos.client.theme.CtosText
 /**
  * Replaces a department's access code, right from the app. Asks first (the old code stops
  * working straight away, though existing members keep their access), then shows the new code
- * once, so it can be copied and shared β€” matching the website's own "Generate new code" flow.
+ * once, so it can be copied and shared — matching the website's own "Generate new code" flow.
  */
 @Composable
 fun GenerateAccessCodeDialog(

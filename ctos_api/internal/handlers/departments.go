@@ -404,7 +404,7 @@ func generateAccessCode() (string, error) {
 
 // regenerateAccessCode: POST /api/v1/departments/{department}/access-code
 // Only people who manage the department may do this. The old code stops working straight away;
-// existing members keep their access β€” matches Department::regenerateAccessCode on the website,
+// existing members keep their access — matches Department::regenerateAccessCode on the website,
 // so a code made from the app is no different from one made there.
 func (app *App) regenerateAccessCode(w http.ResponseWriter, r *http.Request) {
 	department, ok := app.memberDepartment(w, r)

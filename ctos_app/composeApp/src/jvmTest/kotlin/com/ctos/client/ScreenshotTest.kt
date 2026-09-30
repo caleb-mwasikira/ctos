@@ -1,6 +1,7 @@
 package com.ctos.client
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.runtime.Composable
@@ -18,8 +19,10 @@ import com.ctos.client.data.GlobalSearchResults
 import com.ctos.client.data.FormState
 import com.ctos.client.data.LocalFile
 import com.ctos.client.data.LocalFolderState
+import com.ctos.client.data.PickedFile
 import com.ctos.client.data.RecentChange
 import com.ctos.client.data.Screen
+import com.ctos.client.data.SecureDropKeyState
 import com.ctos.client.data.SyncStatus
 import com.ctos.client.data.groupByOrganization
 import com.ctos.client.network.Department
@@ -27,6 +30,9 @@ import com.ctos.client.network.DepartmentDetails
 import com.ctos.client.network.DepartmentInvitation
 import com.ctos.client.network.DepartmentMember
 import com.ctos.client.network.OrganizationRef
+import com.ctos.client.network.SecureDropLists
+import com.ctos.client.network.SecureDropRecipientOption
+import com.ctos.client.network.SecureDropSummary
 import com.ctos.client.screens.DashboardContent
 import com.ctos.client.screens.DepartmentAccessCodeContent
 import com.ctos.client.screens.DepartmentContent
@@ -37,11 +43,14 @@ import com.ctos.client.screens.DepartmentsContent
 import com.ctos.client.screens.ForgotPasswordContent
 import com.ctos.client.screens.JoinDepartmentForm
 import com.ctos.client.screens.GenerateAccessCodeCard
+import com.ctos.client.screens.OpenSecureDropForm
 import com.ctos.client.screens.RegisterContent
 import com.ctos.client.screens.SearchDialogContent
 import com.ctos.client.screens.LoadingScreen
 import com.ctos.client.screens.LoginContent
 import com.ctos.client.screens.OrganizationContent
+import com.ctos.client.screens.SecureDropContent
+import com.ctos.client.screens.SendSecureDropContent
 import com.ctos.client.screens.SettingsContent
 import com.ctos.client.screens.VerifyEmailContent
 import com.ctos.client.screens.layouts.AppShell
@@ -364,6 +373,98 @@ class ScreenshotTest {
         render("join-dialog-error", 520, 520) {
             DialogCard("Join a department", onDismiss = {}, icon = Icons.Default.VpnKey, description = "Ask your team for the department ID and its access code.") {
                 JoinDepartmentForm(FormState.Failed("The department ID or access code is incorrect."), { _, _ -> }, {})
+            }
+        }
+    }
+
+    // ── Secure Drop (docs/secure-drop.md) ─────────────────────────────────
+
+    private val secureDropRecipients = listOf(
+        SecureDropRecipientOption(1, "Alice Wanjiku", "-----BEGIN PUBLIC KEY-----\nMFk...\n-----END PUBLIC KEY-----", "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56"),
+        SecureDropRecipientOption(2, "Brian Otieno", "-----BEGIN PUBLIC KEY-----\nMFk...\n-----END PUBLIC KEY-----", "12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB"),
+    )
+    private val secureDropDrops = SecureDropLists(
+        sent = listOf(SecureDropSummary(1, 1, "Engineering", 1, "Alice Wanjiku", "Q3-budget.xlsx", 1_468_006, "iv", now - 5 * minute)),
+        received = listOf(SecureDropSummary(2, 1, "Engineering", 2, "Brian Otieno", "Contract-draft.pdf", 240_000, "iv", now - 2 * 60 * minute)),
+    )
+
+    @Composable
+    private fun SecureDrop(
+        keyState: SecureDropKeyState,
+        keySetupState: FormState = FormState.Idle,
+        pendingKeyPairFingerprint: String? = null,
+        lists: SecureDropLists = SecureDropLists(emptyList(), emptyList()),
+    ) = SecureDropContent(
+        keyState, keySetupState, pendingKeyPairFingerprint, lists, departments,
+        onSetUpKeyPair = { _, _ -> }, onRestartKeySetup = {}, onEncryptAndSaveKey = { _, _ -> }, onEditKeySetup = {},
+        onCopyKey = {}, onRemoveKey = {}, onSend = {}, onOpenDrop = {}, onDeleteDrop = {},
+    )
+
+    @Test
+    fun secureDrop() {
+        render("secure-drop-setup", 1200, 900) {
+            Shell(Screen.SecureDrop, "Secure Drop") { SecureDrop(SecureDropKeyState.None) }
+        }
+        render("secure-drop-setup-pair-error", 1200, 950) {
+            Shell(Screen.SecureDrop, "Secure Drop") { SecureDrop(SecureDropKeyState.None, FormState.Failed("Those do not look like a valid key pair.")) }
+        }
+        render("secure-drop-setup-passphrase-step", 1200, 950) {
+            Shell(Screen.SecureDrop, "Secure Drop") {
+                SecureDrop(SecureDropKeyState.None, pendingKeyPairFingerprint = "8a87870664097a7e1f9b2321956e59133e04bd3b2575b89aaf97c5f062f51912")
+            }
+        }
+        render("secure-drop-setup-passphrase-error", 1200, 1000) {
+            Shell(Screen.SecureDrop, "Secure Drop") {
+                SecureDrop(
+                    SecureDropKeyState.None,
+                    FormState.Failed("The passphrases do not match."),
+                    pendingKeyPairFingerprint = "8a87870664097a7e1f9b2321956e59133e04bd3b2575b89aaf97c5f062f51912",
+                )
+            }
+        }
+        render("secure-drop-ready", 1200, 1000) {
+            val ready = SecureDropKeyState.Ready("SHA-256: AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34", now - 30 * 24 * 60 * minute)
+            Shell(Screen.SecureDrop, "Secure Drop") { SecureDrop(ready, lists = secureDropDrops) }
+        }
+        render("secure-drop-empty", 1200, 700) {
+            val ready = SecureDropKeyState.Ready("SHA-256: AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34", now)
+            Shell(Screen.SecureDrop, "Secure Drop") { SecureDrop(ready) }
+        }
+    }
+
+    private class FakePickedFile(override val name: String) : PickedFile {
+        override suspend fun readBytes(): ByteArray = ByteArray(0)
+    }
+
+    @Test
+    fun sendSecureDrop() {
+        render("send-secure-drop-empty", 900, 700) {
+            Shell(Screen.SecureDropSend, "Secure Drop", canGoBack = true) {
+                SendSecureDropContent("Engineering", secureDropRecipients, myUserId = 1L, FormState.Idle, onChooseFile = {}, pickedFile = null, onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+        render("send-secure-drop-picked", 900, 700) {
+            Shell(Screen.SecureDropSend, "Secure Drop", canGoBack = true) {
+                SendSecureDropContent("Engineering", secureDropRecipients, myUserId = 1L, FormState.Idle, onChooseFile = {}, pickedFile = FakePickedFile("Q3-budget.xlsx"), onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+        render("send-secure-drop-no-recipients", 900, 500) {
+            Shell(Screen.SecureDropSend, "Secure Drop", canGoBack = true) {
+                SendSecureDropContent("Finance", emptyList(), myUserId = 1L, FormState.Idle, onChooseFile = {}, pickedFile = null, onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+    }
+
+    @Test
+    fun openSecureDropDialog() {
+        render("open-secure-drop-dialog", 520, 320) {
+            DialogCard("Open \"${secureDropDrops.received[0].name}\"", onDismiss = {}, icon = Icons.Default.Lock) {
+                OpenSecureDropForm(FormState.Idle, onConfirm = {}, onEdit = {})
+            }
+        }
+        render("open-secure-drop-dialog-error", 520, 380) {
+            DialogCard("Open \"${secureDropDrops.received[0].name}\"", onDismiss = {}, icon = Icons.Default.Lock) {
+                OpenSecureDropForm(FormState.Failed("That did not decrypt this. Check your passphrase and try again."), onConfirm = {}, onEdit = {})
             }
         }
     }

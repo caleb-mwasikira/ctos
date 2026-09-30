@@ -89,6 +89,17 @@ See `internal/handlers/routes.go`.
 | `POST /api/v1/departments/{department}/invitations` | yes | `{"email"}` — share the department (managers only); adds a verified account straight away, otherwise emails an invitation |
 | `DELETE /api/v1/departments/{department}/invitations/{invitation}` | yes | withdraw a pending invitation (managers only) |
 | `POST /api/v1/departments/{department}/access-code` | yes | replace the department's access code with a new random one (managers only); returns `{"access_code"}` once |
+| `POST /api/v1/encryption-keys/challenge` | yes | `{"public_key"}` → `{"data": {"ciphertext"}}` — a nonce encrypted with that key, step one of setting up a Secure Drop key pair (see `docs/secure-drop.md`) |
+| `POST /api/v1/encryption-keys` | yes | `{"proof", "encrypted_private_key"}` — step two: proves the challenge was decrypted, then stores the key pair |
+| `GET /api/v1/encryption-keys` | yes | the caller's own key status: `{"fingerprint", "created_at"}` |
+| `GET /api/v1/encryption-keys/download` | yes | the caller's own encrypted private key PEM, to import into another device |
+| `DELETE /api/v1/encryption-keys` | yes | removes the key pair and every Secure Drop it sent or received |
+| `GET /api/v1/secure-drops` | yes | `{"data": {"sent": [...], "received": [...]}}` |
+| `GET /api/v1/departments/{department}/secure-drop-recipients` | yes | department members who have a Secure Drop key, with their public key |
+| `POST /api/v1/departments/{department}/secure-drop` | yes | multipart: `name`, `iv`, `ciphertext` (file), `recipients` (JSON array of `{"user_id","encrypted_key"}`) — already encrypted on the sender's own device |
+| `GET /api/v1/secure-drops/{secureDrop}` | yes | the caller's own wrapped AES key and the file's nonce, to decrypt it locally |
+| `GET /api/v1/secure-drops/{secureDrop}/download` | yes | the ciphertext itself |
+| `DELETE /api/v1/secure-drops/{secureDrop}` | yes | owner only |
 | `GET /api/v1/departments/{department}/changes?cursor=N&limit=N` | yes | files and folders that changed after `cursor` (see below) |
 | `GET /api/v1/departments/{department}/files?path=P` | yes | download a file (supports `Range`) |
 | `PUT /api/v1/departments/{department}/files?path=P&base_version=N` | yes | upload a file (the request body is the content) |
@@ -96,13 +107,22 @@ See `internal/handlers/routes.go`.
 | `DELETE /api/v1/departments/{department}/nodes?path=P&base_version=N` | yes | delete a file, or a folder with everything in it |
 | `GET /api/v1/ws` | yes | WebSocket; sends `{"type": "department.changed", "data": {"department_id", "cursor"}}` |
 
-Login answers `403` until the user has verified their email address β€” the link the website
+Login answers `403` until the user has verified their email address — the link the website
 emails after sign-up, or the code `auth/register` emails and `auth/verify-email` checks, for an
-account made from the app β€” and a password reset, from the website or from `auth/reset-password`,
+account made from the app — and a password reset, from the website or from `auth/reset-password`,
 signs every device out by deleting its tokens. `auth/register`, `auth/verify-email/resend` and
 `auth/forgot-password` all email a 6-digit code good for an hour (`verification_codes`, a table
 only this API touches; the website keeps using its own signed links and `password_reset_tokens`
 for its own pages).
+
+Secure Drop (`docs/secure-drop.md`) is end-to-end encrypted files between department members: an
+RSA key pair made or imported on the device itself, its private half never leaving that device
+unencrypted. This API only ever stores or moves ciphertext — the public key, the passphrase-
+encrypted private key, and a file's already-encrypted bytes and already RSA-wrapped AES key. The
+one RSA operation it performs itself, `encryption-keys/challenge`, uses SHA-1 as OAEP's own
+padding hash (not a place SHA-1's known weaknesses apply) because the website's PHP has no way to
+ask `openssl_public_encrypt()` for a different one, and every device speaking this protocol has to
+agree on the one PHP is stuck with.
 
 The owner of an organization can lock a member out of one department or out of the whole
 organization (`department_user.locked_at`, `organization_locks`). A locked member does not see

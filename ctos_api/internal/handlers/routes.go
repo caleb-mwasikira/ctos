@@ -52,6 +52,20 @@ func (app *App) Routes() http.Handler {
 			api.Delete("/departments/{department}/invitations/{invitation}", app.withdrawInvitation)
 			api.Post("/departments/{department}/access-code", app.regenerateAccessCode)
 
+			// Secure Drop: end-to-end encrypted files between department members (docs/secure-drop.md).
+			api.Post("/encryption-keys/challenge", app.encryptionKeyChallenge)
+			api.Post("/encryption-keys", app.storeEncryptionKey)
+			api.Get("/encryption-keys", app.showEncryptionKey)
+			api.Get("/encryption-keys/download", app.downloadEncryptionKey)
+			api.Delete("/encryption-keys", app.deleteEncryptionKey)
+
+			api.Get("/secure-drops", app.listSecureDrops)
+			api.Get("/departments/{department}/secure-drop-recipients", app.secureDropRecipients)
+			api.Post("/departments/{department}/secure-drop", app.storeSecureDrop)
+			api.Get("/secure-drops/{secureDrop}", app.showSecureDrop)
+			api.Get("/secure-drops/{secureDrop}/download", app.downloadSecureDrop)
+			api.Delete("/secure-drops/{secureDrop}", app.deleteSecureDrop)
+
 			// The files of a department. A path is always in the query, never in the URL.
 			api.Get("/departments/{department}/changes", app.listChanges)
 			api.Get("/departments/{department}/files", app.downloadFile)

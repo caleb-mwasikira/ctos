@@ -17,6 +17,7 @@ import com.ctos.client.copyToClipboard
 import com.ctos.client.data.AppViewModel
 import com.ctos.client.data.DepartmentEvents
 import com.ctos.client.data.Screen
+import com.ctos.client.data.rememberFilePicker
 import com.ctos.client.data.rememberFolderPicker
 import com.ctos.client.data.syncRootDirectory
 import com.ctos.client.deviceName
@@ -64,7 +65,17 @@ fun App(viewModel: AppViewModel) {
         val searchDialogOpen by viewModel.searchDialogOpen.collectAsState()
         val globalSearchQuery by viewModel.globalSearchQuery.collectAsState()
         val globalSearchResults by viewModel.globalSearchResults.collectAsState()
+        val secureDropKeyState by viewModel.secureDropKeyState.collectAsState()
+        val secureDropKeySetupState by viewModel.secureDropKeySetupState.collectAsState()
+        val secureDropPendingKeyPairFingerprint by viewModel.secureDropPendingKeyPairFingerprint.collectAsState()
+        val secureDropLists by viewModel.secureDropLists.collectAsState()
+        val secureDropRecipients by viewModel.secureDropRecipients.collectAsState()
+        val secureDropSendState by viewModel.secureDropSendState.collectAsState()
+        val pickedSecureDropFile by viewModel.pickedSecureDropFile.collectAsState()
+        val openingSecureDrop by viewModel.openingSecureDrop.collectAsState()
+        val openSecureDropState by viewModel.openSecureDropState.collectAsState()
         val folderPicker = rememberFolderPicker(viewModel::addFolder)
+        val filePicker = rememberFilePicker(viewModel::pickSecureDropFile)
 
         // The server refused our token: back to the login screen.
         LaunchedEffect(Unit) {
@@ -204,6 +215,32 @@ fun App(viewModel: AppViewModel) {
                                 onConfirm = viewModel::leaveDepartment,
                                 onCancel = { viewModel.back() },
                             )
+                            Screen.SecureDrop -> SecureDropContent(
+                                keyState = secureDropKeyState,
+                                keySetupState = secureDropKeySetupState,
+                                pendingKeyPairFingerprint = secureDropPendingKeyPairFingerprint,
+                                lists = secureDropLists,
+                                departments = viewModel.departments,
+                                onSetUpKeyPair = viewModel::setUpSecureDropKeyPair,
+                                onRestartKeySetup = viewModel::restartSecureDropKeySetup,
+                                onEncryptAndSaveKey = viewModel::encryptAndSaveSecureDropKey,
+                                onEditKeySetup = viewModel::clearSecureDropKeySetupError,
+                                onCopyKey = viewModel::copySecureDropKey,
+                                onRemoveKey = viewModel::removeSecureDropKey,
+                                onSend = viewModel::openSendSecureDrop,
+                                onOpenDrop = viewModel::openSecureDropDetails,
+                                onDeleteDrop = viewModel::deleteSecureDrop,
+                            )
+                            Screen.SecureDropSend -> SendSecureDropContent(
+                                departmentName = department?.name.orEmpty(),
+                                recipients = secureDropRecipients,
+                                myUserId = user?.user_id ?: -1L,
+                                state = secureDropSendState,
+                                onChooseFile = filePicker::open,
+                                pickedFile = pickedSecureDropFile,
+                                onSend = viewModel::sendSecureDrop,
+                                onEdit = viewModel::clearSecureDropSendError,
+                            )
                             Screen.Settings -> SettingsContent(
                                 userName = user?.user_name.orEmpty(),
                                 userEmail = user?.user_email.orEmpty(),
@@ -261,6 +298,16 @@ fun App(viewModel: AppViewModel) {
                     onQueryChange = viewModel::setGlobalSearchQuery,
                     onSelect = viewModel::openSearchResult,
                     onDismiss = viewModel::closeSearchDialog,
+                )
+            }
+
+            openingSecureDrop?.let { drop ->
+                OpenSecureDropDialog(
+                    drop = drop,
+                    state = openSecureDropState,
+                    onConfirm = viewModel::decryptAndSaveSecureDrop,
+                    onEdit = viewModel::clearOpenSecureDropError,
+                    onDismiss = viewModel::closeOpeningSecureDrop,
                 )
             }
 

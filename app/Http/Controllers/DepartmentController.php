@@ -95,7 +95,7 @@ class DepartmentController extends Controller
     /**
      * Just the file list, for the department page to poll (resources/js/app.js) so a file someone
      * else adds or changes elsewhere shows up here without a reload. It answers only that poll
-     * (marked by its own header): a plain visit β€” typed in, bookmarked, opened from history β€” gets
+     * (marked by its own header): a plain visit — typed in, bookmarked, opened from history — gets
      * sent to the real page instead of a bare, unstyled fragment with no head or CSS.
      */
     public function explorer(Request $request, Department $department): View|RedirectResponse

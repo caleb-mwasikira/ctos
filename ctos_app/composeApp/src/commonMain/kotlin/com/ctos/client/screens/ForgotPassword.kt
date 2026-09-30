@@ -16,7 +16,7 @@ import com.ctos.client.screens.widgets.PrimaryButton
 /**
  * Two steps, the same screen: enter the email address to get a code, then enter that code and a
  * new password. [emailSent] is null for the first step, and the address the code went to once
- * it has been sent β€” the caller (the view model) is what remembers which step this is, the same
+ * it has been sent — the caller (the view model) is what remembers which step this is, the same
  * way [com.ctos.client.screens.GenerateAccessCodeDialog] remembers whether a code was made yet.
  */
 @Composable

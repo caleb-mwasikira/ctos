@@ -35,7 +35,7 @@ data class GlobalSearchResults(
 
 /**
  * Searches organizations, departments, and every synced department's files and folders, all by
- * name, all at once β€” everything the app already knows on this device, with no request to the
+ * name, all at once — everything the app already knows on this device, with no request to the
  * server. [syncStates] is [SyncManager.states]: a department not in it (not syncing, or never
  * opened) simply contributes no files, the same as one with an empty folder.
  */

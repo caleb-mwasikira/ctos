@@ -20,12 +20,12 @@ desktop app / Android app ──► CTOS API (Go) ──► Postgres  ◄── 
 Works: creating an account and confirming the email address with the code that gets sent (no
 browser involved), logging in and out, resetting a forgotten password with an emailed code (from
 the login screen, or as "Change password" once signed in), organizations (including a fresh one
-with no departments yet) and departments β€” each with its own members, access code and invitations
-pages, and its own "Leave department" page β€” a search popup (the top bar's search icon) across
+with no departments yet) and departments — each with its own members, access code and invitations
+pages, and its own "Leave department" page — a search popup (the top bar's search icon) across
 organizations, departments, and every synced department's files and folders at once, joining a
 department, live refresh when the server says something changed, creating an organization,
 sharing a department by email, generating its new access code, and full two-way file sync of each
-department's folder β€” including a folder added from the app ("Add folder"), conflict copies when
+department's folder — including a folder added from the app ("Add folder"), conflict copies when
 both sides changed the same file, and opening a file with whatever app the device has for it. See
 `data/SyncEngine.kt` (the sync itself) and `data/SyncManager.kt` (one running per department).
 Uploads go over the raw-upload protocol described in the API's own README
@@ -34,7 +34,7 @@ Uploads go over the raw-upload protocol described in the API's own README
 the API any other way than plain HTTP/JSON.
 
 Not yet: managing members (locking, assigning a lead), creating a department, and renaming an
-organization or department β€” those still open the right page on the website (a button on the
+organization or department — those still open the right page on the website (a button on the
 organization page says so).
 
 ## Run it

@@ -177,7 +177,7 @@ func (db *Database) GetEncryptedAccessCode(ctx context.Context, departmentID int
 
 // SetAccessCode overwrites a department's access code: hash is what joining checks against next
 // (bcrypt, matching Department::acceptsAccessCode); encrypted is the copy managers can be shown
-// (Laravel's Crypt format, or nil to leave it unset β€” see accessCodeOf in handlers/departments.go).
+// (Laravel's Crypt format, or nil to leave it unset — see accessCodeOf in handlers/departments.go).
 func (db *Database) SetAccessCode(ctx context.Context, departmentID int64, hash string, encrypted *string) error {
 	_, err := db.Pool.Exec(ctx, `update departments set access_code = $1, access_code_encrypted = $2, updated_at = now() where id = $3`,
 		hash, encrypted, departmentID)

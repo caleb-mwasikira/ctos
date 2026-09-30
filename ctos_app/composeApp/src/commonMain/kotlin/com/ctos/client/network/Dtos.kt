@@ -219,3 +219,69 @@ enum class DepartmentRole(val label: String, val canManage: Boolean) {
 }
 
 val Department.departmentRole: DepartmentRole get() = DepartmentRole.fromApi(role)
+
+// ── Secure Drop (docs/secure-drop.md): end-to-end encrypted files between department members ──
+
+@Serializable
+data class EncryptionKeyChallengeRequest(@SerialName("public_key") val publicKey: String)
+
+@Serializable
+data class EncryptionKeyChallengeData(val ciphertext: String)
+
+@Serializable
+data class StoreEncryptionKeyRequest(
+    val proof: String,
+    @SerialName("encrypted_private_key") val encryptedPrivateKey: String,
+)
+
+@Serializable
+data class EncryptionKeyStatus(
+    val fingerprint: String,
+    @SerialName("created_at") val createdAtMillis: Long,
+)
+
+/** A department member who has set up a Secure Drop key: enough to encrypt a file's AES key for them. */
+@Serializable
+data class SecureDropRecipientOption(
+    val id: Long,
+    val name: String,
+    @SerialName("public_key") val publicKey: String,
+    val fingerprint: String,
+)
+
+@Serializable
+data class SecureDropSummary(
+    val id: Long,
+    @SerialName("department_id") val departmentId: Long,
+    @SerialName("department_name") val departmentName: String,
+    @SerialName("owner_id") val ownerId: Long,
+    @SerialName("owner_name") val ownerName: String,
+    val name: String,
+    val size: Long,
+    val iv: String,
+    @SerialName("created_at") val createdAtMillis: Long,
+)
+
+@Serializable
+data class SecureDropLists(
+    val sent: List<SecureDropSummary>,
+    val received: List<SecureDropSummary>,
+)
+
+@Serializable
+data class SecureDropDetails(
+    val id: Long,
+    val name: String,
+    val size: Long,
+    val iv: String,
+    @SerialName("encrypted_key") val encryptedKey: String,
+)
+
+@Serializable
+data class SecureDropRecipientUpload(
+    @SerialName("user_id") val userId: Long,
+    @SerialName("encrypted_key") val encryptedKey: String,
+)
+
+@Serializable
+data class SecureDropIdData(val id: Long)

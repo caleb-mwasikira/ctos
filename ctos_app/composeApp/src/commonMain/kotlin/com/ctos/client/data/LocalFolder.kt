@@ -52,6 +52,9 @@ fun isIgnoredFile(name: String): Boolean =
 fun departmentFolder(department: Department): String =
     "${syncRootDirectory()}/${department.organization.slug}/${department.slug}"
 
+/** Where a Secure Drop (docs/secure-drop.md) is saved once decrypted: it is not part of any department's own synced folder. */
+fun secureDropDownloadsFolder(): String = "${syncRootDirectory()}/Secure Drop"
+
 /**
  * Every file below [root] (folders are not listed), sorted by path. The folder is created when it
  * does not exist yet, so a department always has a place to drop files into.

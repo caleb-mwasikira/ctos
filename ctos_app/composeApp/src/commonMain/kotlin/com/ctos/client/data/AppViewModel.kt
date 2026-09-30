@@ -3,13 +3,20 @@ package com.ctos.client.data
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ctos.client.ToastManager
+import com.ctos.client.copyToClipboard
 import com.ctos.client.db.Session
 import com.ctos.client.deviceName
 import com.ctos.client.network.CtosApi
 import com.ctos.client.network.Department
 import com.ctos.client.network.DepartmentDetails
 import com.ctos.client.network.OrganizationSummaryDto
+import com.ctos.client.network.SecureDropLists
+import com.ctos.client.network.SecureDropRecipientOption
+import com.ctos.client.network.SecureDropRecipientUpload
+import com.ctos.client.network.SecureDropSummary
 import com.ctos.client.network.WsEvent
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.toByteArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 
 /** Where the user is: a screen, and for the detail screens which organization or department. */
 data class Destination(
@@ -51,6 +59,15 @@ sealed interface FormState {
     data object Working : FormState
 
     data class Failed(val message: String) : FormState
+}
+
+/** Whether this device has a Secure Drop key pair set up yet (docs/secure-drop.md). */
+sealed interface SecureDropKeyState {
+    data object Loading : SecureDropKeyState
+
+    data object None : SecureDropKeyState
+
+    data class Ready(val fingerprint: String, val createdAtMillis: Long) : SecureDropKeyState
 }
 
 class AppViewModel : ViewModel() {
@@ -148,6 +165,45 @@ class AppViewModel : ViewModel() {
     private val _leaveState = MutableStateFlow<FormState>(FormState.Idle)
     val leaveState: StateFlow<FormState> = _leaveState.asStateFlow()
 
+    // ── Secure Drop (docs/secure-drop.md) ────────────────────────────────────
+
+    private val _secureDropKeyState = MutableStateFlow<SecureDropKeyState>(SecureDropKeyState.Loading)
+    val secureDropKeyState: StateFlow<SecureDropKeyState> = _secureDropKeyState.asStateFlow()
+
+    private val _secureDropKeySetupState = MutableStateFlow<FormState>(FormState.Idle)
+    val secureDropKeySetupState: StateFlow<FormState> = _secureDropKeySetupState.asStateFlow()
+
+    /**
+     * Set once step 1 (generate or import) makes a key pair, entirely on this device, and cleared
+     * once step 2 uploads its encrypted result (or the person starts over). Non-null means the
+     * setup card should show step 2 (the passphrase) instead of step 1 (the key pair itself).
+     */
+    private val _secureDropPendingKeyPairFingerprint = MutableStateFlow<String?>(null)
+    val secureDropPendingKeyPairFingerprint: StateFlow<String?> = _secureDropPendingKeyPairFingerprint.asStateFlow()
+
+    /** The key pair step 1 made, held in memory only until step 2 encrypts and uploads it (or starts over). */
+    private var secureDropPendingKeyPair: SecureDropKeyPair? = null
+
+    private val _secureDropLists = MutableStateFlow(SecureDropLists(emptyList(), emptyList()))
+    val secureDropLists: StateFlow<SecureDropLists> = _secureDropLists.asStateFlow()
+
+    private val _secureDropRecipients = MutableStateFlow<List<SecureDropRecipientOption>>(emptyList())
+    val secureDropRecipients: StateFlow<List<SecureDropRecipientOption>> = _secureDropRecipients.asStateFlow()
+
+    private val _secureDropSendState = MutableStateFlow<FormState>(FormState.Idle)
+    val secureDropSendState: StateFlow<FormState> = _secureDropSendState.asStateFlow()
+
+    /** The file chosen on the "send, encrypted" screen, not yet read into memory. */
+    private val _pickedSecureDropFile = MutableStateFlow<PickedFile?>(null)
+    val pickedSecureDropFile: StateFlow<PickedFile?> = _pickedSecureDropFile.asStateFlow()
+
+    /** Which drop the "enter your passphrase" dialog is open for, if any. */
+    private val _openingSecureDrop = MutableStateFlow<SecureDropSummary?>(null)
+    val openingSecureDrop: StateFlow<SecureDropSummary?> = _openingSecureDrop.asStateFlow()
+
+    private val _openSecureDropState = MutableStateFlow<FormState>(FormState.Idle)
+    val openSecureDropState: StateFlow<FormState> = _openSecureDropState.asStateFlow()
+
     private var openedDepartment: String? = null
 
     init {
@@ -176,6 +232,11 @@ class AppViewModel : ViewModel() {
     fun goTo(screen: Screen) {
         history.clear()
         show(Destination(screen))
+        // The key and the lists of what was sent/received can change elsewhere, so refresh on every visit.
+        if (screen == Screen.SecureDrop) {
+            loadSecureDropKeyState()
+            loadSecureDrops()
+        }
     }
 
     fun openOrganization(organizationSlug: String) = push(Destination(Screen.OrganizationDetail, organizationSlug))
@@ -747,6 +808,253 @@ class AppViewModel : ViewModel() {
                     loadDepartments(silent = true)
                 }
                 .onFailure { _leaveState.value = FormState.Failed(it.message ?: "Could not leave the department.") }
+        }
+    }
+
+    // ── Secure Drop (docs/secure-drop.md) ────────────────────────────────────
+
+    fun openSecureDrop() = goTo(Screen.SecureDrop)
+
+    private fun loadSecureDropKeyState() {
+        viewModelScope.launch {
+            AppRepository.encryptionKeyStatus()
+                .onSuccess { status ->
+                    _secureDropKeyState.value = if (status == null) SecureDropKeyState.None else SecureDropKeyState.Ready(status.fingerprint, status.createdAtMillis)
+                }
+                .onFailure { _secureDropKeyState.value = SecureDropKeyState.None }
+        }
+    }
+
+    private fun loadSecureDrops() {
+        viewModelScope.launch {
+            AppRepository.secureDrops().onSuccess { _secureDropLists.value = it }
+        }
+    }
+
+    fun clearSecureDropKeySetupError() {
+        if (_secureDropKeySetupState.value is FormState.Failed) _secureDropKeySetupState.value = FormState.Idle
+    }
+
+    /**
+     * Step 1 of setting up a key: makes a new key pair, or imports one someone already had
+     * ([importPublicPem] and [importPrivatePem] both given) — entirely on this device, and
+     * nothing is sent anywhere yet. Importing doubles as validating the pair: a malformed PEM
+     * fails to parse here.
+     */
+    fun setUpSecureDropKeyPair(importPublicPem: String?, importPrivatePem: String?) {
+        if (_secureDropKeySetupState.value is FormState.Working) return
+        _secureDropKeySetupState.value = FormState.Working
+        viewModelScope.launch {
+            try {
+                val pair = withContext(Dispatchers.Default) {
+                    if (importPublicPem != null && importPrivatePem != null) {
+                        if (importPublicPem.isBlank() || importPrivatePem.isBlank()) {
+                            throw IllegalArgumentException("Paste both your public and your private key.")
+                        }
+                        SecureDropCrypto.importKeyPair(importPublicPem, importPrivatePem)
+                    } else {
+                        SecureDropCrypto.generateKeyPair()
+                    }
+                }
+                secureDropPendingKeyPair = pair
+                _secureDropPendingKeyPairFingerprint.value = withContext(Dispatchers.Default) { SecureDropCrypto.fingerprintOfPublicKeyPem(pair.publicKeyPem) }
+                _secureDropKeySetupState.value = FormState.Idle
+            } catch (e: Exception) {
+                secureDropPendingKeyPair = null
+                _secureDropKeySetupState.value = FormState.Failed(e.message ?: "Those do not look like a valid key pair.")
+            }
+        }
+    }
+
+    /** Back to step 1: forgets the pending key pair from [setUpSecureDropKeyPair]. */
+    fun restartSecureDropKeySetup() {
+        secureDropPendingKeyPair = null
+        _secureDropPendingKeyPairFingerprint.value = null
+        _secureDropKeySetupState.value = FormState.Idle
+    }
+
+    /**
+     * Step 2: protects step 1's key pair with [passphrase], proves possession of it to the
+     * server, and uploads only the encrypted result (plus the public key). A copy of the
+     * encrypted private key is also saved to this device, as a local backup.
+     */
+    fun encryptAndSaveSecureDropKey(passphrase: String, confirmation: String) {
+        val pair = secureDropPendingKeyPair
+        if (pair == null) {
+            _secureDropKeySetupState.value = FormState.Failed("Set up your key pair first.")
+            return
+        }
+        if (_secureDropKeySetupState.value is FormState.Working) return
+        if (passphrase.length < 8) {
+            _secureDropKeySetupState.value = FormState.Failed("Choose a passphrase of at least 8 characters.")
+            return
+        }
+        if (passphrase != confirmation) {
+            _secureDropKeySetupState.value = FormState.Failed("The passphrases do not match.")
+            return
+        }
+
+        _secureDropKeySetupState.value = FormState.Working
+        viewModelScope.launch {
+            try {
+                val challenge = AppRepository.secureDropChallenge(pair.publicKeyPem).getOrThrow()
+                val proof = withContext(Dispatchers.Default) { SecureDropCrypto.decryptChallenge(pair.privateKey, challenge) }
+                val envelope = withContext(Dispatchers.Default) { SecureDropCrypto.encryptPrivateKey(pair.privateKey, passphrase) }
+
+                val folder = secureDropDownloadsFolder()
+                withContext(Dispatchers.Default) {
+                    localFiles(folder).writeFrom("ctos-secure-drop-key.pem", ByteReadChannel(envelope.encodeToByteArray()), Clock.System.now().toEpochMilliseconds(), expectedSha256 = null)
+                }
+
+                AppRepository.storeEncryptionKey(proof, envelope).getOrThrow()
+
+                secureDropPendingKeyPair = null
+                _secureDropPendingKeyPairFingerprint.value = null
+                _secureDropKeySetupState.value = FormState.Idle
+                ToastManager.success("Your Secure Drop key is set up (a backup copy was saved to $folder). Keep your passphrase somewhere safe: it is the only way to read what is shared with you.")
+                loadSecureDropKeyState()
+            } catch (e: Exception) {
+                _secureDropKeySetupState.value = FormState.Failed(e.message ?: "Could not set up your key. Check the fields and try again.")
+            }
+        }
+    }
+
+    /** Copies the encrypted private key to the clipboard, to paste somewhere safe as a backup. */
+    fun copySecureDropKey() {
+        viewModelScope.launch {
+            AppRepository.downloadEncryptionKey()
+                .onSuccess {
+                    copyToClipboard(it)
+                    ToastManager.success("Your encrypted key was copied. Paste it somewhere safe.")
+                }
+                .onFailure { ToastManager.error(it.message ?: "Could not download your key.") }
+        }
+    }
+
+    /** Removes the key pair, and (since nobody could still open them) everything it sent or received. */
+    fun removeSecureDropKey() {
+        viewModelScope.launch {
+            AppRepository.deleteEncryptionKey()
+                .onSuccess {
+                    ToastManager.success("Your Secure Drop key was removed.")
+                    loadSecureDropKeyState()
+                    loadSecureDrops()
+                }
+                .onFailure { ToastManager.error(it.message ?: "Could not remove your key.") }
+        }
+    }
+
+    /** The form to send one, encrypted, to the members of [department] who have a Secure Drop key. */
+    fun openSendSecureDrop(department: Department) {
+        push(Destination(Screen.SecureDropSend, department.organization.slug, department.slug))
+        _secureDropRecipients.value = emptyList()
+        _secureDropSendState.value = FormState.Idle
+        _pickedSecureDropFile.value = null
+        viewModelScope.launch {
+            AppRepository.secureDropRecipients(department.slug).onSuccess { _secureDropRecipients.value = it }
+        }
+    }
+
+    fun clearSecureDropSendError() {
+        if (_secureDropSendState.value is FormState.Failed) _secureDropSendState.value = FormState.Idle
+    }
+
+    /** Called once the system file picker returns a choice; nothing is read from disk yet. */
+    fun pickSecureDropFile(file: PickedFile) {
+        _pickedSecureDropFile.value = file
+        clearSecureDropSendError()
+    }
+
+    /** Reads [_pickedSecureDropFile], encrypts it once, and sends it to every recipient in [recipientIds] (their own AES key each, wrapped for them). */
+    fun sendSecureDrop(fileName: String, recipientIds: Set<Long>) {
+        val slug = destination.value.departmentSlug ?: return
+        val picked = _pickedSecureDropFile.value ?: return
+        if (_secureDropSendState.value is FormState.Working) return
+        if (recipientIds.isEmpty()) {
+            _secureDropSendState.value = FormState.Failed("Pick at least one person to send it to.")
+            return
+        }
+
+        _secureDropSendState.value = FormState.Working
+        viewModelScope.launch {
+            try {
+                val fileBytes = picked.readBytes()
+                val recipients = _secureDropRecipients.value.filter { it.id in recipientIds }
+                val encrypted = withContext(Dispatchers.Default) { SecureDropCrypto.encryptFile(fileBytes) }
+                val wrapped = withContext(Dispatchers.Default) {
+                    recipients.map { SecureDropRecipientUpload(it.id, SecureDropCrypto.wrapAesKeyFor(it.publicKey, encrypted.rawKey)) }
+                }
+                AppRepository.sendSecureDrop(slug, fileName, encrypted.iv, encrypted.ciphertext, wrapped).getOrThrow()
+
+                _secureDropSendState.value = FormState.Idle
+                _pickedSecureDropFile.value = null
+                ToastManager.success("\"$fileName\" was sent, encrypted.")
+                back()
+                loadSecureDrops()
+            } catch (e: Exception) {
+                _secureDropSendState.value = FormState.Failed(e.message ?: "Could not send this. Check the fields and try again.")
+            }
+        }
+    }
+
+    /** Opens the "enter your passphrase" dialog for a drop the person owns or received. */
+    fun openSecureDropDetails(drop: SecureDropSummary) {
+        _openingSecureDrop.value = drop
+        _openSecureDropState.value = FormState.Idle
+    }
+
+    fun clearOpenSecureDropError() {
+        if (_openSecureDropState.value is FormState.Failed) _openSecureDropState.value = FormState.Idle
+    }
+
+    /** Removes a drop this person owns; the ciphertext and every recipient's wrapped key are deleted with it. */
+    fun deleteSecureDrop(drop: SecureDropSummary) {
+        viewModelScope.launch {
+            AppRepository.deleteSecureDrop(drop.id)
+                .onSuccess { ToastManager.success("\"${drop.name}\" was deleted."); loadSecureDrops() }
+                .onFailure { ToastManager.error(it.message ?: "Could not delete this.") }
+        }
+    }
+
+    fun closeOpeningSecureDrop() {
+        _openingSecureDrop.value = null
+        _openSecureDropState.value = FormState.Idle
+    }
+
+    /**
+     * Decrypts the drop [_openingSecureDrop] is open for with [passphrase], and saves the result
+     * under [secureDropDownloadsFolder]. The passphrase, and the plain private key it unlocks,
+     * exist only for as long as this one decryption takes.
+     */
+    fun decryptAndSaveSecureDrop(passphrase: String) {
+        val drop = _openingSecureDrop.value ?: return
+        if (_openSecureDropState.value is FormState.Working) return
+
+        _openSecureDropState.value = FormState.Working
+        viewModelScope.launch {
+            try {
+                val envelope = AppRepository.downloadEncryptionKey().getOrThrow()
+                val privateKey = withContext(Dispatchers.Default) { SecureDropCrypto.decryptPrivateKey(envelope, passphrase) }
+
+                val details = AppRepository.secureDropDetails(drop.id).getOrThrow()
+                val rawKey = withContext(Dispatchers.Default) { SecureDropCrypto.unwrapAesKey(privateKey, details.encryptedKey) }
+
+                var ciphertext = ByteArray(0)
+                AppRepository.downloadSecureDrop(drop.id) { channel -> ciphertext = channel.toByteArray() }.getOrThrow()
+
+                val plain = withContext(Dispatchers.Default) { SecureDropCrypto.decryptFile(ciphertext, details.iv, rawKey) }
+
+                val folder = secureDropDownloadsFolder()
+                withContext(Dispatchers.Default) {
+                    localFiles(folder).writeFrom(details.name, ByteReadChannel(plain), Clock.System.now().toEpochMilliseconds(), expectedSha256 = null)
+                }
+
+                _openSecureDropState.value = FormState.Idle
+                _openingSecureDrop.value = null
+                ToastManager.success("\"${details.name}\" was decrypted and saved to $folder.")
+            } catch (e: Exception) {
+                _openSecureDropState.value = FormState.Failed(e.message ?: "Could not open this file. Check your passphrase and try again.")
+            }
         }
     }
 

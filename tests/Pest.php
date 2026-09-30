@@ -44,7 +44,36 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * A real RSA-2048 key pair, the same shape a browser's Web Crypto would hand the server: the
+ * public key as a PEM, and the OpenSSL resource for the test itself to decrypt a challenge with
+ * (standing in for what the person's own device does in resources/js/secure-drop-crypto.js).
+ */
+function makeSecureDropKeyPair(): array
 {
-    // ..
+    $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+    $details = openssl_pkey_get_details($key);
+
+    return ['resource' => $key, 'public_key' => $details['key']];
+}
+
+/** What the person's device sends back after decrypting the challenge (see EncryptionKeyController::challenge). */
+function decryptSecureDropChallenge(mixed $privateKeyResource, string $ciphertextBase64): string
+{
+    openssl_private_decrypt(base64_decode($ciphertextBase64), $nonce, $privateKeyResource, OPENSSL_PKCS1_OAEP_PADDING);
+
+    return base64_encode($nonce);
+}
+
+/**
+ * A structurally valid "-----BEGIN CTOS ENCRYPTED PRIVATE KEY-----" envelope (see
+ * docs/secure-drop.md): real random bytes in the right shape, but not an actual encrypted key —
+ * good enough for anything that only checks the envelope is well-formed and refuses to decrypt.
+ */
+function makeSecureDropEnvelope(): string
+{
+    $bytes = chr(1).random_bytes(16).pack('N', 210_000).random_bytes(12).random_bytes(48);
+    $lines = implode("\n", str_split(base64_encode($bytes), 64));
+
+    return "-----BEGIN CTOS ENCRYPTED PRIVATE KEY-----\n{$lines}\n-----END CTOS ENCRYPTED PRIVATE KEY-----";
 }
