@@ -1,5 +1,11 @@
 <x-app-layout title="Secure Drop">
-    <x-page-header title="Secure Drop" subtitle="Files encrypted on your own device before they leave it. Nobody but the people you pick — not even this server — can read them." />
+    <x-page-header title="Secure Drop" subtitle="Files encrypted on your own device before they leave it. Nobody but the people you pick — not even this server — can read them.">
+        @if ($hasKey && auth()->user()->departments->isNotEmpty())
+            <x-slot:actions>
+                <x-button type="button" data-dialog-open="send-drop-dialog"><x-icon name="lock" class="size-4" /> Send, encrypted</x-button>
+            </x-slot:actions>
+        @endif
+    </x-page-header>
 
     @if (! $hasKey)
         <x-card class="max-w-xl">
@@ -125,7 +131,13 @@
                         <h2 class="font-semibold">Your key</h2>
                     </div>
                     <p class="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                        Fingerprint <x-copy-chip :text="auth()->user()->encryptionKey->fingerprint" />
+                        Fingerprint
+                        <button
+                            type="button"
+                            data-dialog-open="fingerprint-dialog"
+                            title="Show the full fingerprint"
+                            class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                        >{{ Str::substr(auth()->user()->encryptionKey->fingerprint, 0, 16) }}…</button>
                     </p>
                     <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
                         Made {{ auth()->user()->encryptionKey->created_at->diffForHumans() }}. Compare this fingerprint with someone out of band (a call, in person) before trusting a key you were not there to set up yourself.
@@ -182,6 +194,52 @@
             </div>
         </div>
     </dialog>
+
+    @if ($hasKey)
+        {{-- The fingerprint chip above is truncated; this shows it in full. --}}
+        <dialog id="fingerprint-dialog" aria-label="Your key's fingerprint" class="m-auto w-full max-w-md rounded-2xl border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100">
+            <div class="p-6 sm:p-8">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white"><x-icon name="key" /></span>
+                        <h2 class="text-lg font-semibold">Your key's fingerprint</h2>
+                    </div>
+                    <form method="dialog"><button class="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close"><x-icon name="x" class="size-5" /></button></form>
+                </div>
+                <p class="mt-6 break-all rounded-lg bg-slate-100 p-3 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ auth()->user()->encryptionKey->fingerprint }}</p>
+                <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">Compare this with someone out of band (a call, in person) before trusting a key you were not there to set up yourself.</p>
+                <x-button type="button" data-copy="{{ auth()->user()->encryptionKey->fingerprint }}" variant="secondary" class="mt-5 w-full">
+                    <span data-copy-label>Copy fingerprint</span>
+                </x-button>
+            </div>
+        </dialog>
+    @endif
+
+    @if ($hasKey && auth()->user()->departments->isNotEmpty())
+        {{-- Opened by the "Send, encrypted" button above; which department decides who can receive it. --}}
+        <dialog id="send-drop-dialog" aria-label="Send, encrypted" class="m-auto w-full max-w-md rounded-2xl border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100">
+            <div class="p-6 sm:p-8">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white"><x-icon name="lock" /></span>
+                        <h2 class="text-lg font-semibold">Send, encrypted</h2>
+                    </div>
+                    <form method="dialog"><button class="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close"><x-icon name="x" class="size-5" /></button></form>
+                </div>
+                <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">To members of which department?</p>
+                <ul class="mt-4 space-y-2">
+                    @foreach (auth()->user()->departments as $department)
+                        <li>
+                            <a href="{{ route('secure-drop.create', $department) }}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-800">
+                                {{ $department->name }}
+                                <x-icon name="chevron-right" class="size-4 text-slate-400" />
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        </dialog>
+    @endif
 
     @push('scripts')
         @vite(['resources/js/secure-drop.js'])

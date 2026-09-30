@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Department;
 use App\Models\SecureDrop;
 use App\Models\SecureDropRecipient;
+use App\Notifications\SecureDropReceived;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -83,7 +84,7 @@ class SecureDropController extends Controller
         $storagePath = 'secure-drops/'.Str::uuid()->toString();
         Storage::disk('local')->put($storagePath, $request->file('ciphertext')->get());
 
-        DB::transaction(function () use ($department, $owner, $input, $storagePath) {
+        $drop = DB::transaction(function () use ($department, $owner, $input, $storagePath) {
             $drop = SecureDrop::create([
                 'department_id' => $department->id,
                 'owner_id' => $owner->id,
@@ -99,7 +100,14 @@ class SecureDropController extends Controller
                     'encrypted_key' => $recipient['encrypted_key'],
                 ]);
             }
+
+            return $drop;
         });
+
+        // Everyone but the owner (already there, and already knows) is emailed a link plus the
+        // still-encrypted file. A mail failure is reported but never undoes the send.
+        $drop->recipients()->where('user_id', '!=', $owner->id)->with('user')->get()
+            ->each(fn (SecureDropRecipient $recipient) => $this->notifyUser($recipient->user, new SecureDropReceived($drop, $owner)));
 
         if ($request->wantsJson()) {
             return response(['message' => "\"{$input['name']}\" was sent, encrypted."]);

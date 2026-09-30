@@ -6,7 +6,9 @@ use App\Models\Organization;
 use App\Models\SecureDrop;
 use App\Models\User;
 use App\Models\UserEncryptionKey;
+use App\Notifications\SecureDropReceived;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -49,6 +51,32 @@ it('sends a file to every recipient chosen, including the sender', function () {
         ->and($drop->recipients()->count())->toBe(2)
         ->and($drop->recipients()->where('user_id', $this->recipient->id)->exists())->toBeTrue();
     Storage::disk('local')->assertExists($drop->storage_path);
+});
+
+it('emails every recipient but not the sender, with the ciphertext attached', function () {
+    Notification::fake();
+    $payload = secureDropPayload([$this->sender->id, $this->recipient->id]);
+
+    $this->actingAs($this->sender)->post(route('secure-drop.store', $this->department), $payload);
+
+    Notification::assertSentTo($this->recipient, SecureDropReceived::class, function (SecureDropReceived $notification) {
+        return $notification->secureDrop->name === 'secret.txt'
+            && $notification->sender->is($this->sender)
+            && collect($notification->toMail($this->recipient)->rawAttachments)->isNotEmpty();
+    });
+    Notification::assertNotSentTo($this->sender, SecureDropReceived::class);
+});
+
+it('does not attach the ciphertext to the email when it is too large', function () {
+    Notification::fake();
+    $payload = secureDropPayload([$this->recipient->id]);
+    $payload['ciphertext'] = UploadedFile::fake()->create('ciphertext', 11_000); // KB: just over the 10 MB cutoff
+
+    $this->actingAs($this->sender)->post(route('secure-drop.store', $this->department), $payload);
+
+    Notification::assertSentTo($this->recipient, SecureDropReceived::class, function (SecureDropReceived $notification) {
+        return collect($notification->toMail($this->recipient)->rawAttachments)->isEmpty();
+    });
 });
 
 it('answers with json when the sending page asks for it', function () {
