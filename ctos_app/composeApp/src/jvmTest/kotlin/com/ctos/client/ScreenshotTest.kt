@@ -50,6 +50,7 @@ import com.ctos.client.screens.LoadingScreen
 import com.ctos.client.screens.LoginContent
 import com.ctos.client.screens.OrganizationContent
 import com.ctos.client.screens.SecureDropContent
+import com.ctos.client.screens.SendSecureDropByEmailContent
 import com.ctos.client.screens.SendSecureDropContent
 import com.ctos.client.screens.SettingsContent
 import com.ctos.client.screens.VerifyEmailContent
@@ -382,6 +383,7 @@ class ScreenshotTest {
     private val secureDropRecipients = listOf(
         SecureDropRecipientOption(1, "Alice Wanjiku", "-----BEGIN PUBLIC KEY-----\nMFk...\n-----END PUBLIC KEY-----", "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56"),
         SecureDropRecipientOption(2, "Brian Otieno", "-----BEGIN PUBLIC KEY-----\nMFk...\n-----END PUBLIC KEY-----", "12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12CD34EF56AB"),
+        SecureDropRecipientOption(3, "Chloe Njeri"),
     )
     private val secureDropDrops = SecureDropLists(
         sent = listOf(SecureDropSummary(1, 1, "Engineering", 1, "Alice Wanjiku", "Q3-budget.xlsx", 1_468_006, "iv", now - 5 * minute)),
@@ -397,7 +399,7 @@ class ScreenshotTest {
     ) = SecureDropContent(
         keyState, keySetupState, pendingKeyPairFingerprint, lists, departments,
         onSetUpKeyPair = { _, _ -> }, onRestartKeySetup = {}, onEncryptAndSaveKey = { _, _ -> }, onEditKeySetup = {},
-        onCopyKey = {}, onRemoveKey = {}, onSend = {}, onOpenDrop = {}, onDeleteDrop = {},
+        onCopyKey = {}, onRemoveKey = {}, onSend = {}, onSendByEmail = {}, onOpenDrop = {}, onDeleteDrop = {},
     )
 
     @Test
@@ -451,6 +453,25 @@ class ScreenshotTest {
         render("send-secure-drop-no-recipients", 900, 500) {
             Shell(Screen.SecureDropSend, "Secure Drop", canGoBack = true) {
                 SendSecureDropContent("Finance", emptyList(), myUserId = 1L, FormState.Idle, onChooseFile = {}, pickedFile = null, onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+    }
+
+    @Test
+    fun sendSecureDropByEmail() {
+        render("send-secure-drop-by-email-empty", 900, 600) {
+            Shell(Screen.SecureDropSendByEmail, "Secure Drop", canGoBack = true) {
+                SendSecureDropByEmailContent(FormState.Idle, onChooseFile = {}, pickedFile = null, onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+        render("send-secure-drop-by-email-picked", 900, 600) {
+            Shell(Screen.SecureDropSendByEmail, "Secure Drop", canGoBack = true) {
+                SendSecureDropByEmailContent(FormState.Idle, onChooseFile = {}, pickedFile = FakePickedFile("contract.pdf"), onSend = { _, _ -> }, onEdit = {})
+            }
+        }
+        render("send-secure-drop-by-email-error", 900, 650) {
+            Shell(Screen.SecureDropSendByEmail, "Secure Drop", canGoBack = true) {
+                SendSecureDropByEmailContent(FormState.Failed("Could not send this. Check the fields and try again."), onChooseFile = {}, pickedFile = FakePickedFile("contract.pdf"), onSend = { _, _ -> }, onEdit = {})
             }
         }
     }

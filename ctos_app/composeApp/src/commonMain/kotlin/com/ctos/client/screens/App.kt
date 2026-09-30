@@ -71,6 +71,7 @@ fun App(viewModel: AppViewModel) {
         val secureDropLists by viewModel.secureDropLists.collectAsState()
         val secureDropRecipients by viewModel.secureDropRecipients.collectAsState()
         val secureDropSendState by viewModel.secureDropSendState.collectAsState()
+        val secureDropSendByEmailState by viewModel.secureDropSendByEmailState.collectAsState()
         val pickedSecureDropFile by viewModel.pickedSecureDropFile.collectAsState()
         val openingSecureDrop by viewModel.openingSecureDrop.collectAsState()
         val openSecureDropState by viewModel.openSecureDropState.collectAsState()
@@ -228,6 +229,7 @@ fun App(viewModel: AppViewModel) {
                                 onCopyKey = viewModel::copySecureDropKey,
                                 onRemoveKey = viewModel::removeSecureDropKey,
                                 onSend = viewModel::openSendSecureDrop,
+                                onSendByEmail = viewModel::openSendSecureDropByEmail,
                                 onOpenDrop = viewModel::openSecureDropDetails,
                                 onDeleteDrop = viewModel::deleteSecureDrop,
                             )
@@ -240,6 +242,13 @@ fun App(viewModel: AppViewModel) {
                                 pickedFile = pickedSecureDropFile,
                                 onSend = viewModel::sendSecureDrop,
                                 onEdit = viewModel::clearSecureDropSendError,
+                            )
+                            Screen.SecureDropSendByEmail -> SendSecureDropByEmailContent(
+                                state = secureDropSendByEmailState,
+                                onChooseFile = filePicker::open,
+                                pickedFile = pickedSecureDropFile,
+                                onSend = viewModel::sendSecureDropByEmail,
+                                onEdit = viewModel::clearSecureDropSendByEmailError,
                             )
                             Screen.Settings -> SettingsContent(
                                 userName = user?.user_name.orEmpty(),

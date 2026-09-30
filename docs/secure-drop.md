@@ -93,29 +93,34 @@ again there.
 
 ## Sending directly by email, not scoped to a department
 
-Besides picking from a department's members, the website's Secure Drop page can send straight to
-an email address (`SecureDropController::lookup()`/`send()`), with no department involved at all
-(`secure_drops.department_id` is nullable for exactly this — it shows as "Sent by email" wherever
-a department name would otherwise go). The sender's device looks the address up first:
+Besides picking from a department's members, Secure Drop can send straight to an email address —
+on the website (`SecureDropController::lookup()`/`send()`) and in the KMM app (Go's
+`lookupSecureDropRecipient`/`sendSecureDropDirect`, driven from `AppViewModel.sendSecureDropByEmail`)
+alike — with no department involved at all (`secure_drops.department_id` is nullable for exactly
+this — it shows as "Sent by email" wherever a department name would otherwise go). Whichever
+device is sending looks the address up first:
 
 - **An account with its own key**: sent exactly like a department send — the file's AES key is
   RSA-wrapped for their real public key, and they are emailed a link (`SecureDropReceived`), fully
   end-to-end the whole way.
 - **No account yet (or none with a key)**: since there is no public key to wrap anything with, the
-  AES key is instead wrapped with a one-time password (a random 20 characters), using the same
-  PBKDF2 + AES-GCM envelope as an encrypted private key, just labeled
-  `-----BEGIN CTOS PASSWORD PROTECTED KEY-----` instead and holding a raw AES key rather than an
-  RSA one. That password, an unguessable link, and an invitation to create an account are emailed
-  together (`SecureDropSharedByPassword`).
+  AES key is instead wrapped with a one-time password (a random 20 characters, generated on the
+  sender's own device — `SecureDropCrypto.generatePassword()`), using the same PBKDF2 + AES-GCM
+  envelope as an encrypted private key, just labeled `-----BEGIN CTOS PASSWORD PROTECTED KEY-----`
+  instead and holding a raw AES key rather than an RSA one. That password, an unguessable link,
+  and an invitation to create an account are emailed together (the website's
+  `SecureDropSharedByPassword`; Go sends the plain-text equivalent itself, since its own mailer
+  has no HTML/attachment support).
 
-  **This is the one place the server ever sees a plaintext secret.** Every other password or
+  **This is the one place either server ever sees a plaintext secret.** Every other password or
   private key in this feature only ever exists on the device that made it; this one-time password
   has to pass through the server in the clear, because the server is what sends the email
   containing it. Putting a password in the same message as what it protects is weaker than the
   key-based flow above — anyone who can read that email can open the file — but there is no way to
   do better while still supporting someone who has never set up a Secure Drop key.
 
-  Opening it needs no login: `secure_drop_recipients.access_token` (set only for this kind of
+  Opening it is website-only: the recipient has no account, so there is no app they could log
+  into anyway. It needs no login: `secure_drop_recipients.access_token` (set only for this kind of
   recipient, `user_id` left null) is an unguessable value the emailed link carries, and
   `secure-drop.shared.*` are ordinary unauthenticated routes gated by it instead of a session,
   serving a stripped-down guest page that asks for the password and decrypts in the browser the
@@ -132,7 +137,12 @@ a department name would otherwise go). The sender's device looks the address up 
   protocol above) and `resources/js/secure-drop.js` (the pages' own wiring), views under
   `resources/views/secure-drop/` (`shared.blade.php` is the unauthenticated page for someone with
   no account).
-- API (`ctos_api/`): `internal/handlers/encryption_keys.go`, `internal/handlers/secure_drops.go`,
-  same protocol, same tables.
-- App (`ctos_app/`): `commonJvmMain/.../SecureDropCrypto.kt` (the protocol above, `javax.crypto`),
-  screens under `screens/securedrop/`.
+- API (`ctos_api/`): `internal/handlers/encryption_keys.go`, `internal/handlers/secure_drops.go`
+  (`lookupSecureDropRecipient`/`sendSecureDropDirect` are the send-by-email handlers), same
+  protocol, same tables. No equivalent of the website's `secure-drop.shared.*` guest page — a
+  recipient with no account has no app to open either backend from.
+- App (`ctos_app/`): `commonMain/.../SecureDropCrypto.kt` (the expect declarations) and
+  `commonJvmMain/.../SecureDropCrypto.kt` (the protocol above, shared by desktop and Android via
+  `javax.crypto`), `data/AppViewModel.kt`'s Secure Drop section, screens directly under
+  `screens/` (`SecureDrop.kt`, `SendSecureDrop.kt`, `SendSecureDropByEmail.kt`,
+  `OpenSecureDropDialog.kt`).

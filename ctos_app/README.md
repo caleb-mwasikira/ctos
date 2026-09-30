@@ -33,6 +33,18 @@ Uploads go over the raw-upload protocol described in the API's own README
 `network/RawUpload.kt`/`.jvm.kt` speak directly over a socket; nothing else about the app talks to
 the API any other way than plain HTTP/JSON.
 
+Also works: Secure Drop (`../../docs/secure-drop.md`), end-to-end encrypted file sharing — a key
+pair generated or imported on the device itself, its private half never leaving unencrypted;
+sending one file to a department's members (`screens/SendSecureDrop.kt`, showing everyone, not
+just who already has a key) or directly to an email address, not scoped to any department
+(`screens/SendSecureDropByEmail.kt`) — to an account with its own key, fully end-to-end, or to
+someone with none yet, protected with a one-time password and an emailed invitation instead. The
+app only ever sends in that last case; opening what was sent stays website-only, since a
+recipient with no account has no app to open it with either way. Single files only here (not a
+whole folder at once, unlike the website) — see `data/SecureDropCrypto.kt`
+(`commonMain` for the `expect` API, `commonJvmMain` for the one `actual` desktop and Android
+share) for the protocol itself.
+
 Not yet: managing members (locking, assigning a lead), creating a department, and renaming an
 organization or department — those still open the right page on the website (a button on the
 organization page says so).

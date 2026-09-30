@@ -31,6 +31,16 @@ func (db *Database) GetUserByEmail(ctx context.Context, email string) (*User, er
 	return user, err
 }
 
+// GetUserByID returns nil when no such user exists.
+func (db *Database) GetUserByID(ctx context.Context, id int64) (*User, error) {
+	user := &User{}
+	err := db.Pool.QueryRow(ctx, `select `+userColumns+` from users where id = $1`, id).Scan(user.fields()...)
+	if notFound(err) {
+		return nil, nil
+	}
+	return user, err
+}
+
 // CreateUser makes a new account, unverified, the same shape the website's own sign-up form
 // makes. The caller has already hashed the password.
 func (db *Database) CreateUser(ctx context.Context, name, email, passwordHash string) (int64, error) {

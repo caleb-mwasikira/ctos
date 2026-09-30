@@ -37,6 +37,8 @@ enum class Screen(
 
     // Secure Drop (docs/secure-drop.md), reached from Screen.SecureDrop
     SecureDropSend,
+    /** Sending directly by email, not scoped to any department. */
+    SecureDropSendByEmail,
 }
 
 /** The department screens: [Destination.departmentSlug] means something on all of these, not just [Screen.DepartmentDetail]. */

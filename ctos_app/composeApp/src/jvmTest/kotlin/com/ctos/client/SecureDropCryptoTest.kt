@@ -122,6 +122,45 @@ class SecureDropCryptoTest {
         assertFailsWith<Exception> { SecureDropCrypto.decryptFile(ciphertext, iv, wrongKey) }
     }
 
+    // ── sending by email, to someone with no account yet (docs/secure-drop.md) ──
+
+    @Test
+    fun `a generated password is long and drawn from an unambiguous alphabet`() {
+        val password = SecureDropCrypto.generatePassword()
+
+        assertEquals(20, password.length)
+        assertTrue(password.none { it in "0O1lI" })
+        assertNotEquals(password, SecureDropCrypto.generatePassword())
+    }
+
+    @Test
+    fun `a file's AES key wrapped with a one-time password only opens with that password`() {
+        val (ciphertext, iv, rawKey) = SecureDropCrypto.encryptFile("no account yet".toByteArray())
+        val password = SecureDropCrypto.generatePassword()
+
+        val envelope = SecureDropCrypto.wrapAesKeyWithPassword(rawKey, password)
+        assertTrue(envelope.startsWith("-----BEGIN CTOS PASSWORD PROTECTED KEY-----"))
+
+        val unwrapped = SecureDropCrypto.unwrapAesKeyWithPassword(envelope, password)
+        assertContentEquals(rawKey, unwrapped)
+        assertContentEquals("no account yet".toByteArray(), SecureDropCrypto.decryptFile(ciphertext, iv, unwrapped))
+
+        assertFailsWith<IllegalArgumentException> {
+            SecureDropCrypto.unwrapAesKeyWithPassword(envelope, "the wrong password")
+        }
+    }
+
+    @Test
+    fun `a password-protected envelope is not mistaken for an encrypted private key, or the other way round`() {
+        val pair = SecureDropCrypto.generateKeyPair()
+        val passphraseEnvelope = SecureDropCrypto.encryptPrivateKey(pair.privateKey, "a passphrase")
+        val (_, _, rawKey) = SecureDropCrypto.encryptFile("x".toByteArray())
+        val passwordEnvelope = SecureDropCrypto.wrapAesKeyWithPassword(rawKey, "a password")
+
+        assertFailsWith<IllegalArgumentException> { SecureDropCrypto.unwrapAesKeyWithPassword(passphraseEnvelope, "a passphrase") }
+        assertFailsWith<Exception> { SecureDropCrypto.decryptPrivateKey(passwordEnvelope, "a password") }
+    }
+
     private fun extractDer(pem: String, label: String): ByteArray {
         val header = "-----BEGIN $label-----"
         val footer = "-----END $label-----"

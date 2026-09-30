@@ -91,11 +91,13 @@ See `internal/handlers/routes.go`.
 | `POST /api/v1/departments/{department}/access-code` | yes | replace the department's access code with a new random one (managers only); returns `{"access_code"}` once |
 | `POST /api/v1/encryption-keys/challenge` | yes | `{"public_key"}` → `{"data": {"ciphertext"}}` — a nonce encrypted with that key, step one of setting up a Secure Drop key pair (see `docs/secure-drop.md`) |
 | `POST /api/v1/encryption-keys` | yes | `{"proof", "encrypted_private_key"}` — step two: proves the challenge was decrypted, then stores the key pair |
-| `GET /api/v1/encryption-keys` | yes | the caller's own key status: `{"fingerprint", "created_at"}` |
+| `GET /api/v1/encryption-keys` | yes | the caller's own key status: `{"fingerprint", "created_at", "public_key"}` |
 | `GET /api/v1/encryption-keys/download` | yes | the caller's own encrypted private key PEM, to import into another device |
 | `DELETE /api/v1/encryption-keys` | yes | removes the key pair and every Secure Drop it sent or received |
 | `GET /api/v1/secure-drops` | yes | `{"data": {"sent": [...], "received": [...]}}` |
-| `GET /api/v1/departments/{department}/secure-drop-recipients` | yes | department members who have a Secure Drop key, with their public key |
+| `POST /api/v1/secure-drops/lookup` | yes | `{"email"}` → `{"data": {"has_account", "id"?, "name"?, "public_key"?, "fingerprint"?}}` — whether an email belongs to an account with a Secure Drop key |
+| `POST /api/v1/secure-drops/send` | yes | multipart, like below but not scoped to a department: `name`, `iv`, `ciphertext`, `recipients`, plus an optional `password_recipient` (JSON `{"email","encrypted_key"}`) and `password` for someone with no account yet |
+| `GET /api/v1/departments/{department}/secure-drop-recipients` | yes | every active member, with `has_key`; `public_key`/`fingerprint` only for those who have one |
 | `POST /api/v1/departments/{department}/secure-drop` | yes | multipart: `name`, `iv`, `ciphertext` (file), `recipients` (JSON array of `{"user_id","encrypted_key"}`) — already encrypted on the sender's own device |
 | `GET /api/v1/secure-drops/{secureDrop}` | yes | the caller's own wrapped AES key and the file's nonce, to decrypt it locally |
 | `GET /api/v1/secure-drops/{secureDrop}/download` | yes | the ciphertext itself |
@@ -115,16 +117,20 @@ signs every device out by deleting its tokens. `auth/register`, `auth/verify-ema
 only this API touches; the website keeps using its own signed links and `password_reset_tokens`
 for its own pages).
 
-Secure Drop (`docs/secure-drop.md`) is end-to-end encrypted files between department members: an
-RSA key pair made or imported on the device itself, its private half never leaving that device
-unencrypted. This API only ever stores or moves ciphertext — the public key, the passphrase-
-encrypted private key, and a file's already-encrypted bytes and already RSA-wrapped AES key. The
-one RSA operation it performs itself, `encryption-keys/challenge`, uses SHA-1 as OAEP's own
-padding hash (not a place SHA-1's known weaknesses apply) because the website's PHP has no way to
-ask `openssl_public_encrypt()` for a different one, and every device speaking this protocol has to
-agree on the one PHP is stuck with. Sending directly by email — to an account with a key, or to
-someone with none yet, protected with a one-time password and an invitation instead — is a
-website-only addition on top of the same tables; this API does not (yet) expose it.
+Secure Drop (`docs/secure-drop.md`) is end-to-end encrypted files between department members, or
+sent directly by email: an RSA key pair made or imported on the device itself, its private half
+never leaving that device unencrypted. This API only ever stores or moves ciphertext — the public
+key, the passphrase-encrypted private key, and a file's already-encrypted bytes and already
+RSA- or password-wrapped AES key. The one RSA operation it performs itself,
+`encryption-keys/challenge`, uses SHA-1 as OAEP's own padding hash (not a place SHA-1's known
+weaknesses apply) because the website's PHP has no way to ask `openssl_public_encrypt()` for a
+different one, and every device speaking this protocol has to agree on the one PHP is stuck with.
+Sending directly by email to someone with no account yet is the one exception to "only ever
+ciphertext": `secure-drops/send`'s `password` field is a plaintext one-time password this API
+puts straight into that person's invitation email (`internal/mail`, plain text — no HTML or
+attachment, unlike the website's own version of the same email) and never stores. There is no
+API equivalent of the website's page for that person to actually open what was sent, since they
+have no account to open this API's own app with either way.
 
 The owner of an organization can lock a member out of one department or out of the whole
 organization (`department_user.locked_at`, `organization_locks`). A locked member does not see

@@ -16,6 +16,8 @@ import com.ctos.client.network.RegisterRequest
 import com.ctos.client.network.ResetPasswordRequest
 import com.ctos.client.network.SecureDropDetails
 import com.ctos.client.network.SecureDropLists
+import com.ctos.client.network.SecureDropLookupResult
+import com.ctos.client.network.SecureDropPasswordRecipientUpload
 import com.ctos.client.network.SecureDropRecipientOption
 import com.ctos.client.network.SecureDropRecipientUpload
 import com.ctos.client.network.VerifyEmailRequest
@@ -126,6 +128,20 @@ object AppRepository {
 
     suspend fun sendSecureDrop(slug: String, name: String, iv: String, ciphertext: ByteArray, recipients: List<SecureDropRecipientUpload>): Result<Long> =
         withContext(Dispatchers.IO) { api.storeSecureDrop(slug, name, iv, ciphertext, recipients) }
+
+    /** Whether an email belongs to an account with a Secure Drop key — enough to send to them directly, not scoped to any department. */
+    suspend fun lookupSecureDropRecipient(email: String): Result<SecureDropLookupResult> =
+        withContext(Dispatchers.IO) { api.lookupSecureDropRecipient(email) }
+
+    /** Sends directly to whoever [lookupSecureDropRecipient] resolved — not scoped to a department. */
+    suspend fun sendSecureDropDirect(
+        name: String,
+        iv: String,
+        ciphertext: ByteArray,
+        recipients: List<SecureDropRecipientUpload>,
+        passwordRecipient: SecureDropPasswordRecipientUpload? = null,
+        password: String? = null,
+    ): Result<Long> = withContext(Dispatchers.IO) { api.sendSecureDropDirect(name, iv, ciphertext, recipients, passwordRecipient, password) }
 
     suspend fun secureDropDetails(id: Long): Result<SecureDropDetails> = withContext(Dispatchers.IO) { api.getSecureDrop(id) }
 

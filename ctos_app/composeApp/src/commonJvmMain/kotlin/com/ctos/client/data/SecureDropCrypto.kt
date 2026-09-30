@@ -75,7 +75,12 @@ actual object SecureDropCrypto {
         return MessageDigest.getInstance("SHA-256").digest(der).joinToString("") { "%02x".format(it) }
     }
 
-    // ── the encrypted private key envelope ───────────────────────────────────
+    // ── the passphrase-protected envelope (a private key, or someone's copy of a file's AES key) ──
+    //
+    // The same PBKDF2 + AES-GCM envelope wraps two different things under two different PEM
+    // labels: a private key itself (someone's own Secure Drop key, protected with their
+    // passphrase) and, for someone with no account yet, one file's AES key (protected with a
+    // one-time password instead — see docs/secure-drop.md's "sending by email").
 
     private fun deriveAesKeyFromPassphrase(passphrase: String, salt: ByteArray, iterations: Int): SecretKeySpec {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
@@ -83,15 +88,14 @@ actual object SecureDropCrypto {
         return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
     }
 
-    actual fun encryptPrivateKey(privateKey: SecureDropPrivateKey, passphrase: String): String {
-        val plainDer = privateKey.key.encoded // PKCS8, the JCA default for an RSA PrivateKey
+    private fun encryptBytesWithPassphrase(label: String, plainBytes: ByteArray, passphrase: String): String {
         val salt = ByteArray(16).also(random::nextBytes)
         val iv = ByteArray(12).also(random::nextBytes)
         val aesKey = deriveAesKeyFromPassphrase(passphrase, salt, PBKDF2_ITERATIONS)
 
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, aesKey, GCMParameterSpec(128, iv))
-        val ciphertext = cipher.doFinal(plainDer)
+        val ciphertext = cipher.doFinal(plainBytes)
 
         val envelope = ByteArray(1 + salt.size + 4 + iv.size + ciphertext.size)
         var offset = 0
@@ -104,11 +108,12 @@ actual object SecureDropCrypto {
         iv.copyInto(envelope, offset); offset += iv.size
         ciphertext.copyInto(envelope, offset)
 
-        return wrapPem("CTOS ENCRYPTED PRIVATE KEY", envelope)
+        return wrapPem(label, envelope)
     }
 
-    actual fun decryptPrivateKey(envelopePem: String, passphrase: String): SecureDropPrivateKey {
-        val envelope = unwrapPem(envelopePem, "CTOS ENCRYPTED PRIVATE KEY")
+    /** Throws (a message meant to be shown as-is) when the passphrase is wrong — AES-GCM's own tag check fails first. */
+    private fun decryptBytesWithPassphrase(label: String, envelopePem: String, passphrase: String, wrongPassphraseMessage: String): ByteArray {
+        val envelope = unwrapPem(envelopePem, label)
         require(envelope.size >= 1 + 16 + 4 + 12 + 16 && envelope[0] == ENVELOPE_VERSION) { "That does not look like a Secure Drop encrypted key." }
 
         var offset = 1
@@ -122,15 +127,36 @@ actual object SecureDropCrypto {
         val ciphertext = envelope.copyOfRange(offset, envelope.size)
 
         val aesKey = deriveAesKeyFromPassphrase(passphrase, salt, iterations)
-        val plainDer = try {
+        return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, aesKey, GCMParameterSpec(128, iv))
             cipher.doFinal(ciphertext)
         } catch (e: Exception) {
-            throw IllegalArgumentException("Wrong passphrase.")
+            throw IllegalArgumentException(wrongPassphraseMessage)
         }
+    }
 
+    actual fun encryptPrivateKey(privateKey: SecureDropPrivateKey, passphrase: String): String {
+        val plainDer = privateKey.key.encoded // PKCS8, the JCA default for an RSA PrivateKey
+        return encryptBytesWithPassphrase("CTOS ENCRYPTED PRIVATE KEY", plainDer, passphrase)
+    }
+
+    actual fun decryptPrivateKey(envelopePem: String, passphrase: String): SecureDropPrivateKey {
+        val plainDer = decryptBytesWithPassphrase("CTOS ENCRYPTED PRIVATE KEY", envelopePem, passphrase, "Wrong passphrase.")
         return SecureDropPrivateKey(KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(plainDer)))
+    }
+
+    actual fun wrapAesKeyWithPassword(rawAesKey: ByteArray, password: String): String =
+        encryptBytesWithPassphrase("CTOS PASSWORD PROTECTED KEY", rawAesKey, password)
+
+    actual fun unwrapAesKeyWithPassword(envelopePem: String, password: String): ByteArray =
+        decryptBytesWithPassphrase("CTOS PASSWORD PROTECTED KEY", envelopePem, password, "Wrong password.")
+
+    private const val PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789" // no 0/O/1/l/I
+
+    actual fun generatePassword(): String {
+        val bytes = ByteArray(20).also(random::nextBytes)
+        return bytes.map { PASSWORD_ALPHABET[(it.toInt() and 0xFF) % PASSWORD_ALPHABET.length] }.joinToString("")
     }
 
     // ── proving possession of the private key (docs/secure-drop.md) ─────────

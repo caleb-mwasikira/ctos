@@ -11,6 +11,7 @@ import com.ctos.client.network.Department
 import com.ctos.client.network.DepartmentDetails
 import com.ctos.client.network.OrganizationSummaryDto
 import com.ctos.client.network.SecureDropLists
+import com.ctos.client.network.SecureDropPasswordRecipientUpload
 import com.ctos.client.network.SecureDropRecipientOption
 import com.ctos.client.network.SecureDropRecipientUpload
 import com.ctos.client.network.SecureDropSummary
@@ -67,7 +68,8 @@ sealed interface SecureDropKeyState {
 
     data object None : SecureDropKeyState
 
-    data class Ready(val fingerprint: String, val createdAtMillis: Long) : SecureDropKeyState
+    /** [publicKeyPem] is needed to wrap a file's AES key for yourself when sending directly by email — see [AppViewModel.sendSecureDropByEmail]. */
+    data class Ready(val fingerprint: String, val createdAtMillis: Long, val publicKeyPem: String? = null) : SecureDropKeyState
 }
 
 class AppViewModel : ViewModel() {
@@ -193,9 +195,13 @@ class AppViewModel : ViewModel() {
     private val _secureDropSendState = MutableStateFlow<FormState>(FormState.Idle)
     val secureDropSendState: StateFlow<FormState> = _secureDropSendState.asStateFlow()
 
-    /** The file chosen on the "send, encrypted" screen, not yet read into memory. */
+    /** The file chosen on the "send, encrypted" screen, not yet read into memory. Shared by the department-scoped and the by-email send screens (only one is ever open at a time). */
     private val _pickedSecureDropFile = MutableStateFlow<PickedFile?>(null)
     val pickedSecureDropFile: StateFlow<PickedFile?> = _pickedSecureDropFile.asStateFlow()
+
+    /** Sending directly by email, not scoped to any department (docs/secure-drop.md, "sending by email"). */
+    private val _secureDropSendByEmailState = MutableStateFlow<FormState>(FormState.Idle)
+    val secureDropSendByEmailState: StateFlow<FormState> = _secureDropSendByEmailState.asStateFlow()
 
     /** Which drop the "enter your passphrase" dialog is open for, if any. */
     private val _openingSecureDrop = MutableStateFlow<SecureDropSummary?>(null)
@@ -819,7 +825,7 @@ class AppViewModel : ViewModel() {
         viewModelScope.launch {
             AppRepository.encryptionKeyStatus()
                 .onSuccess { status ->
-                    _secureDropKeyState.value = if (status == null) SecureDropKeyState.None else SecureDropKeyState.Ready(status.fingerprint, status.createdAtMillis)
+                    _secureDropKeyState.value = if (status == null) SecureDropKeyState.None else SecureDropKeyState.Ready(status.fingerprint, status.createdAtMillis, status.publicKey)
                 }
                 .onFailure { _secureDropKeyState.value = SecureDropKeyState.None }
         }
@@ -982,7 +988,7 @@ class AppViewModel : ViewModel() {
                 val recipients = _secureDropRecipients.value.filter { it.id in recipientIds }
                 val encrypted = withContext(Dispatchers.Default) { SecureDropCrypto.encryptFile(fileBytes) }
                 val wrapped = withContext(Dispatchers.Default) {
-                    recipients.map { SecureDropRecipientUpload(it.id, SecureDropCrypto.wrapAesKeyFor(it.publicKey, encrypted.rawKey)) }
+                    recipients.mapNotNull { r -> r.publicKey?.let { pk -> SecureDropRecipientUpload(r.id, SecureDropCrypto.wrapAesKeyFor(pk, encrypted.rawKey)) } }
                 }
                 AppRepository.sendSecureDrop(slug, fileName, encrypted.iv, encrypted.ciphertext, wrapped).getOrThrow()
 
@@ -993,6 +999,72 @@ class AppViewModel : ViewModel() {
                 loadSecureDrops()
             } catch (e: Exception) {
                 _secureDropSendState.value = FormState.Failed(e.message ?: "Could not send this. Check the fields and try again.")
+            }
+        }
+    }
+
+    /** The form to send one, encrypted, directly by email — not scoped to any department. */
+    fun openSendSecureDropByEmail() {
+        push(Destination(Screen.SecureDropSendByEmail))
+        _secureDropSendByEmailState.value = FormState.Idle
+        _pickedSecureDropFile.value = null
+    }
+
+    fun clearSecureDropSendByEmailError() {
+        if (_secureDropSendByEmailState.value is FormState.Failed) _secureDropSendByEmailState.value = FormState.Idle
+    }
+
+    /**
+     * Looks up [email] first: an account with its own Secure Drop key gets the usual end-to-end
+     * treatment; anyone else gets a one-time password instead, generated right here and handed to
+     * the server only so it can email it along with an invitation to set up their own key — the
+     * one place in this whole feature the server ever sees a plaintext secret.
+     */
+    fun sendSecureDropByEmail(email: String, fileName: String) {
+        val picked = _pickedSecureDropFile.value ?: return
+        val ownPublicKey = (secureDropKeyState.value as? SecureDropKeyState.Ready)?.publicKeyPem
+        if (_secureDropSendByEmailState.value is FormState.Working) return
+        if (email.isBlank()) {
+            _secureDropSendByEmailState.value = FormState.Failed("Enter an email address.")
+            return
+        }
+        if (ownPublicKey == null) {
+            _secureDropSendByEmailState.value = FormState.Failed("Could not read your own key. Try reopening Secure Drop.")
+            return
+        }
+
+        _secureDropSendByEmailState.value = FormState.Working
+        viewModelScope.launch {
+            try {
+                val lookup = AppRepository.lookupSecureDropRecipient(email).getOrThrow()
+
+                val fileBytes = picked.readBytes()
+                val encrypted = withContext(Dispatchers.Default) { SecureDropCrypto.encryptFile(fileBytes) }
+                val ownWrappedKey = withContext(Dispatchers.Default) { SecureDropCrypto.wrapAesKeyFor(ownPublicKey, encrypted.rawKey) }
+                val myUserId = session.value?.user_id
+                val recipients = mutableListOf<SecureDropRecipientUpload>()
+                if (myUserId != null) recipients.add(SecureDropRecipientUpload(myUserId, ownWrappedKey))
+
+                var passwordRecipient: SecureDropPasswordRecipientUpload? = null
+                var password: String? = null
+                if (lookup.hasAccount && lookup.publicKey != null && lookup.id != null) {
+                    val theirWrappedKey = withContext(Dispatchers.Default) { SecureDropCrypto.wrapAesKeyFor(lookup.publicKey, encrypted.rawKey) }
+                    recipients.add(SecureDropRecipientUpload(lookup.id, theirWrappedKey))
+                } else {
+                    password = SecureDropCrypto.generatePassword()
+                    val passwordWrappedKey = withContext(Dispatchers.Default) { SecureDropCrypto.wrapAesKeyWithPassword(encrypted.rawKey, password) }
+                    passwordRecipient = SecureDropPasswordRecipientUpload(email, passwordWrappedKey)
+                }
+
+                AppRepository.sendSecureDropDirect(fileName, encrypted.iv, encrypted.ciphertext, recipients, passwordRecipient, password).getOrThrow()
+
+                _secureDropSendByEmailState.value = FormState.Idle
+                _pickedSecureDropFile.value = null
+                ToastManager.success("\"$fileName\" was sent, encrypted.")
+                back()
+                loadSecureDrops()
+            } catch (e: Exception) {
+                _secureDropSendByEmailState.value = FormState.Failed(e.message ?: "Could not send this. Check the fields and try again.")
             }
         }
     }

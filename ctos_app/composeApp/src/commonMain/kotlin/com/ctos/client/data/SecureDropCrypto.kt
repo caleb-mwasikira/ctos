@@ -38,6 +38,19 @@ expect object SecureDropCrypto {
 
     fun unwrapAesKey(privateKey: SecureDropPrivateKey, encryptedKeyBase64: String): ByteArray
 
+    /**
+     * For someone with no account yet (docs/secure-drop.md, "sending by email"): a file's raw
+     * AES key, protected with a one-time password instead of a public key. The password itself
+     * is generated on this device too ([generatePassword]) and handed to the server only so it
+     * can be emailed — the one place in this whole feature that happens.
+     */
+    fun wrapAesKeyWithPassword(rawAesKey: ByteArray, password: String): String
+
+    fun unwrapAesKeyWithPassword(envelopePem: String, password: String): ByteArray
+
+    /** 20 characters from a printable, unambiguous alphabet — plenty for a one-time, single-use secret. */
+    fun generatePassword(): String
+
     fun encryptFile(fileBytes: ByteArray): SecureDropEncryptedFile
 
     fun decryptFile(ciphertext: ByteArray, ivBase64: String, rawAesKey: ByteArray): ByteArray

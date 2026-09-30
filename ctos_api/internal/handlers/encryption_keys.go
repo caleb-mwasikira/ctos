@@ -145,6 +145,9 @@ func (app *App) showEncryptionKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
 		"fingerprint": key.Fingerprint,
 		"created_at":  key.CreatedAt.UnixMilli(),
+		// Needed to wrap a file's AES key for yourself when sending directly by email
+		// (docs/secure-drop.md), where there is no department member list to find it in.
+		"public_key": key.PublicKey,
 	}})
 }
 

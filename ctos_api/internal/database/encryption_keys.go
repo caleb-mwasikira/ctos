@@ -58,6 +58,15 @@ type DepartmentMemberWithKey struct {
 	Fingerprint string
 }
 
+// DepartmentMemberKeyStatus is any active department member; PublicKey/Fingerprint are nil for
+// someone who has not set up a Secure Drop key yet — shown, but not pickable, on the sending page.
+type DepartmentMemberKeyStatus struct {
+	ID          int64
+	Name        string
+	PublicKey   *string
+	Fingerprint *string
+}
+
 // GetDepartmentMembersWithKeys lists the department's members who have a Secure Drop key set up.
 func (db *Database) GetDepartmentMembersWithKeys(ctx context.Context, departmentID int64) ([]DepartmentMemberWithKey, error) {
 	rows, err := db.Pool.Query(ctx, `
@@ -79,6 +88,36 @@ func (db *Database) GetDepartmentMembersWithKeys(ctx context.Context, department
 	members := []DepartmentMemberWithKey{}
 	for rows.Next() {
 		var member DepartmentMemberWithKey
+		if err := rows.Scan(&member.ID, &member.Name, &member.PublicKey, &member.Fingerprint); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+// GetDepartmentMembersWithKeyStatus lists every active member, whether or not they have set up a
+// Secure Drop key yet — so a sender can see who to nudge, not just who is already pickable.
+func (db *Database) GetDepartmentMembersWithKeyStatus(ctx context.Context, departmentID int64) ([]DepartmentMemberKeyStatus, error) {
+	rows, err := db.Pool.Query(ctx, `
+		select users.id, users.name, user_encryption_keys.public_key, user_encryption_keys.fingerprint
+		from department_user
+		join users on users.id = department_user.user_id
+		join departments on departments.id = department_user.department_id
+		left join user_encryption_keys on user_encryption_keys.user_id = users.id
+		where department_user.department_id = $1 and department_user.locked_at is null
+		  and not exists (select 1 from organization_locks
+		                  where organization_locks.organization_id = departments.organization_id
+		                    and organization_locks.user_id = users.id)
+		order by lower(users.name), users.id`, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	members := []DepartmentMemberKeyStatus{}
+	for rows.Next() {
+		var member DepartmentMemberKeyStatus
 		if err := rows.Scan(&member.ID, &member.Name, &member.PublicKey, &member.Fingerprint); err != nil {
 			return nil, err
 		}

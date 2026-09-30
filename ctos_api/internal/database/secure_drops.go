@@ -5,13 +5,14 @@ import (
 	"time"
 )
 
-// secure_drops / secure_drop_recipients: end-to-end encrypted files between department members
-// (see docs/secure-drop.md). The website's migrations own both tables.
+// secure_drops / secure_drop_recipients: end-to-end encrypted files between department members,
+// or sent directly by email (see docs/secure-drop.md). The website's migrations own both tables.
 
 type SecureDrop struct {
-	ID             int64
-	DepartmentID   int64
-	DepartmentName string
+	ID int64
+	// DepartmentID/DepartmentName are nil for a drop sent directly by email, not scoped to any department.
+	DepartmentID   *int64
+	DepartmentName *string
 	OwnerID        int64
 	OwnerName      string
 	Name           string
@@ -21,14 +22,20 @@ type SecureDrop struct {
 	CreatedAt      time.Time
 }
 
+// SecureDropRecipientInput is either a real account (UserID set, EncryptedKey RSA-wrapped for
+// their public key) or, for someone with no account yet, a one-time password instead (UserID
+// nil, Email and AccessToken set, EncryptedKey wrapped with that password).
 type SecureDropRecipientInput struct {
-	UserID       int64
+	UserID       *int64
+	Email        *string
 	EncryptedKey string
+	AccessToken  *string
 }
 
 // CreateSecureDrop stores a drop and every recipient's wrapped copy of its key in one
 // transaction: either everyone who should be able to open it can, or nothing is created.
-func (db *Database) CreateSecureDrop(ctx context.Context, departmentID, ownerID int64, name string, size int64, storagePath, iv string, recipients []SecureDropRecipientInput) (int64, error) {
+// departmentID is nil for a drop sent directly by email, not scoped to any department.
+func (db *Database) CreateSecureDrop(ctx context.Context, departmentID *int64, ownerID int64, name string, size int64, storagePath, iv string, recipients []SecureDropRecipientInput) (int64, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -47,8 +54,9 @@ func (db *Database) CreateSecureDrop(ctx context.Context, departmentID, ownerID 
 
 	for _, recipient := range recipients {
 		if _, err := tx.Exec(ctx, `
-			insert into secure_drop_recipients (secure_drop_id, user_id, encrypted_key, created_at, updated_at)
-			values ($1, $2, $3, $4, $4)`, dropID, recipient.UserID, recipient.EncryptedKey, now); err != nil {
+			insert into secure_drop_recipients (secure_drop_id, user_id, email, encrypted_key, access_token, created_at, updated_at)
+			values ($1, $2, $3, $4, $5, $6, $6)`,
+			dropID, recipient.UserID, recipient.Email, recipient.EncryptedKey, recipient.AccessToken, now); err != nil {
 			return 0, err
 		}
 	}
@@ -60,8 +68,9 @@ const secureDropColumns = `secure_drops.id, secure_drops.department_id, departme
 	secure_drops.owner_id, users.name, secure_drops.name, secure_drops.size,
 	secure_drops.storage_path, secure_drops.iv, secure_drops.created_at`
 
+// A drop sent directly by email has no department, so this has to be a LEFT JOIN.
 const secureDropFrom = `from secure_drops
-	join departments on departments.id = secure_drops.department_id
+	left join departments on departments.id = secure_drops.department_id
 	join users on users.id = secure_drops.owner_id`
 
 func scanSecureDrop(row interface{ Scan(...any) error }) (*SecureDrop, error) {

@@ -63,6 +63,7 @@ fun SecureDropContent(
     onCopyKey: () -> Unit,
     onRemoveKey: () -> Unit,
     onSend: (Department) -> Unit,
+    onSendByEmail: () -> Unit,
     onOpenDrop: (SecureDropSummary) -> Unit,
     onDeleteDrop: (SecureDropSummary) -> Unit,
 ) {
@@ -80,9 +81,12 @@ fun SecureDropContent(
             is SecureDropKeyState.Ready -> {
                 YourKeyCard(keyState, onCopyKey, onRemoveKey)
 
-                SectionTitle("Send one, encrypted")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    SectionTitle("Send one, encrypted")
+                    SecondaryButton("By email", onSendByEmail, icon = Icons.Default.Lock)
+                }
                 if (departments.isEmpty()) {
-                    Text("Join a department to send someone a file.", style = CtosText.Small, color = CtosColors.TextMuted)
+                    Text("Join a department to send to its members, or send by email above.", style = CtosText.Small, color = CtosColors.TextMuted)
                 } else {
                     AppCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(8.dp)) {

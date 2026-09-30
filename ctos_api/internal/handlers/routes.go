@@ -60,6 +60,8 @@ func (app *App) Routes() http.Handler {
 			api.Delete("/encryption-keys", app.deleteEncryptionKey)
 
 			api.Get("/secure-drops", app.listSecureDrops)
+			api.Post("/secure-drops/lookup", app.lookupSecureDropRecipient)
+			api.Post("/secure-drops/send", app.sendSecureDropDirect)
 			api.Get("/departments/{department}/secure-drop-recipients", app.secureDropRecipients)
 			api.Post("/departments/{department}/secure-drop", app.storeSecureDrop)
 			api.Get("/secure-drops/{secureDrop}", app.showSecureDrop)

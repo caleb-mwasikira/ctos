@@ -34,7 +34,11 @@ import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
 
-/** The form to send one file, encrypted, to the members of a department who have a Secure Drop key. */
+/**
+ * The form to send one file, encrypted, to the members of a department. Every member is shown,
+ * not just the ones with a Secure Drop key ([SecureDropRecipientOption.hasKey]) — someone without
+ * one yet is shown disabled, so a sender can see who to nudge, the same as the website.
+ */
 @Composable
 fun SendSecureDropContent(
     departmentName: String,
@@ -50,10 +54,10 @@ fun SendSecureDropContent(
     val working = state is FormState.Working
 
     Page {
-        PageTitle("Send, encrypted", "To members of $departmentName who have a Secure Drop key.")
+        PageTitle("Send, encrypted", "To members of $departmentName; only those with a Secure Drop key can be picked.")
 
         if (recipients.isEmpty()) {
-            EmptyState(Icons.Default.Lock, "Nobody here has a Secure Drop key yet", "Ask the other members of $departmentName to set one up, then come back.")
+            EmptyState(Icons.Default.Lock, "Nobody is in this department yet", "")
         } else {
             AppCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -70,14 +74,25 @@ fun SendSecureDropContent(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Checkbox(
-                                    checked = recipient.id in selected,
+                                    checked = recipient.hasKey && recipient.id in selected,
                                     onCheckedChange = { checked -> selected = if (checked) selected + recipient.id else selected - recipient.id; onEdit() },
-                                    enabled = !isMe,
+                                    enabled = recipient.hasKey && !isMe,
                                     colors = CheckboxDefaults.colors(checkedColor = CtosColors.Primary),
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(recipient.name + if (isMe) " (you)" else "", style = CtosText.Small, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(recipient.fingerprint.take(16) + "…", style = CtosText.Caption, color = CtosColors.TextSubtle, maxLines = 1)
+                                    Text(
+                                        recipient.name + if (isMe) " (you)" else "",
+                                        style = CtosText.Small,
+                                        color = if (recipient.hasKey) CtosColors.Text else CtosColors.TextSubtle,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        recipient.fingerprint?.let { it.take(16) + "…" } ?: "No Secure Drop key yet",
+                                        style = CtosText.Caption,
+                                        color = CtosColors.TextSubtle,
+                                        maxLines = 1,
+                                    )
                                 }
                             }
                         }

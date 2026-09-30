@@ -238,22 +238,32 @@ data class StoreEncryptionKeyRequest(
 data class EncryptionKeyStatus(
     val fingerprint: String,
     @SerialName("created_at") val createdAtMillis: Long,
+    /** Needed to wrap a file's AES key for yourself when sending directly by email (docs/secure-drop.md), where there is no department member list to find it in. */
+    @SerialName("public_key") val publicKey: String? = null,
 )
 
-/** A department member who has set up a Secure Drop key: enough to encrypt a file's AES key for them. */
+/**
+ * A department member, whether or not they have set up a Secure Drop key yet — [hasKey] false
+ * means [publicKey]/[fingerprint] are null and this person cannot be picked yet, only shown.
+ */
 @Serializable
 data class SecureDropRecipientOption(
     val id: Long,
     val name: String,
-    @SerialName("public_key") val publicKey: String,
-    val fingerprint: String,
+    @SerialName("public_key") val publicKey: String? = null,
+    val fingerprint: String? = null,
+    @SerialName("has_key") val hasKey: Boolean = publicKey != null,
 )
 
+/**
+ * A drop's [departmentId]/[departmentName] are null when it was sent directly by email, not
+ * scoped to any department (docs/secure-drop.md, "sending by email").
+ */
 @Serializable
 data class SecureDropSummary(
     val id: Long,
-    @SerialName("department_id") val departmentId: Long,
-    @SerialName("department_name") val departmentName: String,
+    @SerialName("department_id") val departmentId: Long? = null,
+    @SerialName("department_name") val departmentName: String? = null,
     @SerialName("owner_id") val ownerId: Long,
     @SerialName("owner_name") val ownerName: String,
     val name: String,
@@ -285,3 +295,23 @@ data class SecureDropRecipientUpload(
 
 @Serializable
 data class SecureDropIdData(val id: Long)
+
+@Serializable
+data class SecureDropLookupRequest(val email: String)
+
+/** Whether [email] belongs to an account with a Secure Drop key — enough to send to them directly, not scoped to any department. */
+@Serializable
+data class SecureDropLookupResult(
+    @SerialName("has_account") val hasAccount: Boolean,
+    val id: Long? = null,
+    val name: String? = null,
+    @SerialName("public_key") val publicKey: String? = null,
+    val fingerprint: String? = null,
+)
+
+/** For someone with no account yet: their email, and their copy of a file's AES key wrapped with a one-time password instead of a public key. */
+@Serializable
+data class SecureDropPasswordRecipientUpload(
+    val email: String,
+    @SerialName("encrypted_key") val encryptedKey: String,
+)

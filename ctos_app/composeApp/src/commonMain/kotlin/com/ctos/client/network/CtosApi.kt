@@ -431,6 +431,49 @@ class CtosApi(
         ) { authorize() }
     }.map { it.id }
 
+    /** Whether an email belongs to an account with a Secure Drop key — enough to send to them directly, not scoped to any department. */
+    suspend fun lookupSecureDropRecipient(email: String): Result<SecureDropLookupResult> =
+        call(SecureDropLookupResult.serializer()) {
+            client.post("$baseUrl/secure-drops/lookup") {
+                authorize()
+                contentType(ContentType.Application.Json)
+                setBody(SecureDropLookupRequest(email))
+            }
+        }
+
+    /**
+     * Sends directly to whoever [lookupSecureDropRecipient] resolved — not scoped to a
+     * department. [passwordRecipient] and [password] are only given together, for someone with
+     * no account yet: [password] is generated on this device ([SecureDropCrypto.generatePassword])
+     * and handed to the server only so it can be emailed, the one place in this whole feature
+     * that happens.
+     */
+    suspend fun sendSecureDropDirect(
+        name: String,
+        iv: String,
+        ciphertext: ByteArray,
+        recipients: List<SecureDropRecipientUpload>,
+        passwordRecipient: SecureDropPasswordRecipientUpload? = null,
+        password: String? = null,
+    ): Result<Long> = call(SecureDropIdData.serializer()) {
+        client.submitFormWithBinaryData(
+            url = "$baseUrl/secure-drops/send",
+            formData = formData {
+                append("name", name)
+                append("iv", iv)
+                append("recipients", ctosJson.encodeToString(ListSerializer(SecureDropRecipientUpload.serializer()), recipients))
+                if (passwordRecipient != null && password != null) {
+                    append("password_recipient", ctosJson.encodeToString(SecureDropPasswordRecipientUpload.serializer(), passwordRecipient))
+                    append("password", password)
+                }
+                append("ciphertext", ciphertext, Headers.build {
+                    append(HttpHeaders.ContentType, "application/octet-stream")
+                    append(HttpHeaders.ContentDisposition, "filename=\"ciphertext\"")
+                })
+            },
+        ) { authorize() }
+    }.map { it.id }
+
     /** What is needed to decrypt a drop: its nonce and the caller's own wrapped key. */
     suspend fun getSecureDrop(id: Long): Result<SecureDropDetails> = call(SecureDropDetails.serializer()) {
         client.get("$baseUrl/secure-drops/$id") { authorize() }
