@@ -1,6 +1,7 @@
 package com.ctos.client
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VpnKey
@@ -50,8 +51,10 @@ import com.ctos.client.screens.LoadingScreen
 import com.ctos.client.screens.LoginContent
 import com.ctos.client.screens.OrganizationContent
 import com.ctos.client.screens.SecureDropContent
+import com.ctos.client.screens.SecureDropFingerprintForm
 import com.ctos.client.screens.SendSecureDropByEmailContent
 import com.ctos.client.screens.SendSecureDropContent
+import com.ctos.client.screens.SendSecureDropPickerForm
 import com.ctos.client.screens.SettingsContent
 import com.ctos.client.screens.VerifyEmailContent
 import com.ctos.client.screens.layouts.AppShell
@@ -399,7 +402,8 @@ class ScreenshotTest {
     ) = SecureDropContent(
         keyState, keySetupState, pendingKeyPairFingerprint, lists, departments,
         onSetUpKeyPair = { _, _ -> }, onRestartKeySetup = {}, onEncryptAndSaveKey = { _, _ -> }, onEditKeySetup = {},
-        onCopyKey = {}, onRemoveKey = {}, onSend = {}, onSendByEmail = {}, onOpenDrop = {}, onDeleteDrop = {},
+        onShowFingerprint = {}, onCopyKey = {}, onRemoveKey = {},
+        onOpenSendPicker = {}, onSend = {}, onOpenDrop = {}, onDeleteDrop = {},
     )
 
     @Test
@@ -431,6 +435,37 @@ class ScreenshotTest {
         render("secure-drop-empty", 1200, 700) {
             val ready = SecureDropKeyState.Ready("SHA-256: AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34", now)
             Shell(Screen.SecureDrop, "Secure Drop") { SecureDrop(ready) }
+        }
+    }
+
+    @Test
+    fun sendSecureDropPickerDialog() {
+        render("send-secure-drop-picker-dialog", 520, 420) {
+            DialogCard("Send, encrypted", onDismiss = {}, icon = Icons.Default.Lock) {
+                SendSecureDropPickerForm(departments = departments, onSend = {}, onSendByEmail = {})
+            }
+        }
+        render("send-secure-drop-picker-dialog-no-departments", 520, 260) {
+            DialogCard("Send, encrypted", onDismiss = {}, icon = Icons.Default.Lock) {
+                SendSecureDropPickerForm(departments = emptyList(), onSend = {}, onSendByEmail = {})
+            }
+        }
+    }
+
+    @Test
+    fun secureDropFingerprintDialog() {
+        render("secure-drop-fingerprint-dialog", 520, 340) {
+            DialogCard(
+                "Your key's fingerprint",
+                onDismiss = {},
+                icon = Icons.Default.Key,
+                description = "Compare this with someone out of band — a call, in person — before trusting a key you were not there to set up yourself.",
+            ) {
+                SecureDropFingerprintForm(
+                    fingerprint = "AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34 EF56 AB12 CD34",
+                    onCopy = {},
+                )
+            }
         }
     }
 

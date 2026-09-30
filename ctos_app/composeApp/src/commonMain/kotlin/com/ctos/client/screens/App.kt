@@ -17,6 +17,7 @@ import com.ctos.client.copyToClipboard
 import com.ctos.client.data.AppViewModel
 import com.ctos.client.data.DepartmentEvents
 import com.ctos.client.data.Screen
+import com.ctos.client.data.SecureDropKeyState
 import com.ctos.client.data.rememberFilePicker
 import com.ctos.client.data.rememberFolderPicker
 import com.ctos.client.data.syncRootDirectory
@@ -75,6 +76,8 @@ fun App(viewModel: AppViewModel) {
         val pickedSecureDropFile by viewModel.pickedSecureDropFile.collectAsState()
         val openingSecureDrop by viewModel.openingSecureDrop.collectAsState()
         val openSecureDropState by viewModel.openSecureDropState.collectAsState()
+        val sendSecureDropPickerOpen by viewModel.sendSecureDropPickerOpen.collectAsState()
+        val secureDropFingerprintDialogOpen by viewModel.secureDropFingerprintDialogOpen.collectAsState()
         val folderPicker = rememberFolderPicker(viewModel::addFolder)
         val filePicker = rememberFilePicker(viewModel::pickSecureDropFile)
 
@@ -228,8 +231,9 @@ fun App(viewModel: AppViewModel) {
                                 onEditKeySetup = viewModel::clearSecureDropKeySetupError,
                                 onCopyKey = viewModel::copySecureDropKey,
                                 onRemoveKey = viewModel::removeSecureDropKey,
+                                onShowFingerprint = viewModel::openSecureDropFingerprintDialog,
+                                onOpenSendPicker = viewModel::openSendSecureDropPicker,
                                 onSend = viewModel::openSendSecureDrop,
-                                onSendByEmail = viewModel::openSendSecureDropByEmail,
                                 onOpenDrop = viewModel::openSecureDropDetails,
                                 onDeleteDrop = viewModel::deleteSecureDrop,
                             )
@@ -318,6 +322,28 @@ fun App(viewModel: AppViewModel) {
                     onEdit = viewModel::clearOpenSecureDropError,
                     onDismiss = viewModel::closeOpeningSecureDrop,
                 )
+            }
+
+            if (sendSecureDropPickerOpen) {
+                SendSecureDropPickerDialog(
+                    departments = viewModel.departments,
+                    onSend = viewModel::openSendSecureDrop,
+                    onSendByEmail = viewModel::openSendSecureDropByEmail,
+                    onDismiss = viewModel::closeSendSecureDropPicker,
+                )
+            }
+
+            if (secureDropFingerprintDialogOpen) {
+                (secureDropKeyState as? com.ctos.client.data.SecureDropKeyState.Ready)?.let { ready ->
+                    SecureDropFingerprintDialog(
+                        fingerprint = ready.fingerprint,
+                        onCopy = {
+                            copyToClipboard(ready.fingerprint)
+                            ToastManager.success("Copied to the clipboard.")
+                        },
+                        onDismiss = viewModel::closeSecureDropFingerprintDialog,
+                    )
+                }
             }
 
             if (createOrgDialogOpen) {

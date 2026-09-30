@@ -113,6 +113,12 @@ class AppViewModel : ViewModel() {
     private val _joinState = MutableStateFlow<FormState>(FormState.Idle)
     val joinState: StateFlow<FormState> = _joinState.asStateFlow()
 
+    private val _sendSecureDropPickerOpen = MutableStateFlow(false)
+    val sendSecureDropPickerOpen: StateFlow<Boolean> = _sendSecureDropPickerOpen.asStateFlow()
+
+    private val _secureDropFingerprintDialogOpen = MutableStateFlow(false)
+    val secureDropFingerprintDialogOpen: StateFlow<Boolean> = _secureDropFingerprintDialogOpen.asStateFlow()
+
     // ── organizations, including ones with no departments yet ───────────────
 
     private val _allOrganizations = MutableStateFlow<List<OrganizationSummaryDto>>(emptyList())
@@ -950,8 +956,25 @@ class AppViewModel : ViewModel() {
         }
     }
 
+    fun openSendSecureDropPicker() {
+        _sendSecureDropPickerOpen.value = true
+    }
+
+    fun closeSendSecureDropPicker() {
+        _sendSecureDropPickerOpen.value = false
+    }
+
+    fun openSecureDropFingerprintDialog() {
+        _secureDropFingerprintDialogOpen.value = true
+    }
+
+    fun closeSecureDropFingerprintDialog() {
+        _secureDropFingerprintDialogOpen.value = false
+    }
+
     /** The form to send one, encrypted, to the members of [department] who have a Secure Drop key. */
     fun openSendSecureDrop(department: Department) {
+        _sendSecureDropPickerOpen.value = false
         push(Destination(Screen.SecureDropSend, department.organization.slug, department.slug))
         _secureDropRecipients.value = emptyList()
         _secureDropSendState.value = FormState.Idle
@@ -1005,6 +1028,7 @@ class AppViewModel : ViewModel() {
 
     /** The form to send one, encrypted, directly by email — not scoped to any department. */
     fun openSendSecureDropByEmail() {
+        _sendSecureDropPickerOpen.value = false
         push(Destination(Screen.SecureDropSendByEmail))
         _secureDropSendByEmailState.value = FormState.Idle
         _pickedSecureDropFile.value = null

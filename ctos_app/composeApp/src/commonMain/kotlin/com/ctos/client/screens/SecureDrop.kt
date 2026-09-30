@@ -1,14 +1,16 @@
 package com.ctos.client.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
@@ -35,18 +37,23 @@ import com.ctos.client.screens.widgets.DangerButton
 import com.ctos.client.screens.widgets.EmptyState
 import com.ctos.client.screens.widgets.LinkButton
 import com.ctos.client.screens.widgets.Page
-import com.ctos.client.screens.widgets.PageTitle
 import com.ctos.client.screens.widgets.PrimaryButton
 import com.ctos.client.screens.widgets.SecondaryButton
 import com.ctos.client.screens.widgets.SectionTitle
 import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
+import kotlinx.datetime.Clock
+
+private val SideBySideWidth = 760.dp
 
 /**
  * Secure Drop (docs/secure-drop.md): files encrypted on this device before they ever leave it,
  * for one or more people to decrypt on theirs. This screen is the key pair's own setup (when
- * there is not one yet) or a summary of it, and everything sent or received.
+ * there is not one yet) or a summary of it, and everything sent or received — the same split as
+ * the website's own /secure-drop page: "Send, encrypted" in the title row (it opens a dialog to
+ * pick a department or send by email, same as the website's), Sent/Received as the main column,
+ * "Your key" and a department shortcut list as the side column.
  */
 @Composable
 fun SecureDropContent(
@@ -60,49 +67,79 @@ fun SecureDropContent(
     onRestartKeySetup: () -> Unit,
     onEncryptAndSaveKey: (passphrase: String, confirmation: String) -> Unit,
     onEditKeySetup: () -> Unit,
+    onShowFingerprint: () -> Unit,
     onCopyKey: () -> Unit,
     onRemoveKey: () -> Unit,
+    onOpenSendPicker: () -> Unit,
     onSend: (Department) -> Unit,
-    onSendByEmail: () -> Unit,
     onOpenDrop: (SecureDropSummary) -> Unit,
     onDeleteDrop: (SecureDropSummary) -> Unit,
 ) {
     Page {
-        PageTitle(
-            "Secure Drop",
-            "Files encrypted on your own device before they leave it. Nobody but the people you pick — not even this server — can read them.",
-        )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val wide = maxWidth >= SideBySideWidth
 
-        when (keyState) {
-            SecureDropKeyState.Loading -> Text("Loading…", style = CtosText.Small, color = CtosColors.TextMuted)
-            SecureDropKeyState.None -> SecureDropKeySetupCard(
-                keySetupState, pendingKeyPairFingerprint, onSetUpKeyPair, onRestartKeySetup, onEncryptAndSaveKey, onEditKeySetup,
-            )
-            is SecureDropKeyState.Ready -> {
-                YourKeyCard(keyState, onCopyKey, onRemoveKey)
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    SectionTitle("Send one, encrypted")
-                    SecondaryButton("By email", onSendByEmail, icon = Icons.Default.Lock)
-                }
-                if (departments.isEmpty()) {
-                    Text("Join a department to send to its members, or send by email above.", style = CtosText.Small, color = CtosColors.TextMuted)
-                } else {
-                    AppCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            departments.forEachIndexed { index, department ->
-                                if (index > 0) HorizontalDivider(color = CtosColors.Border)
-                                DepartmentRow(department, onSend)
-                            }
-                        }
+            Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                val title: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Secure Drop", style = CtosText.PageTitle, color = CtosColors.Text)
+                        Text(
+                            "Files encrypted on your own device before they leave it. Nobody but the people you pick — not even this server — can read them.",
+                            style = CtosText.Body,
+                            color = CtosColors.TextMuted,
+                        )
                     }
                 }
 
-                SectionTitle("Sent")
-                SecureDropRows(lists.sent, empty = "Nothing sent yet.", onOpenDrop, onDeleteDrop, ownedByMe = true)
+                if (keyState is SecureDropKeyState.Ready) {
+                    val actions: @Composable () -> Unit = {
+                        PrimaryButton("Send, encrypted", onOpenSendPicker, icon = Icons.Default.Lock)
+                    }
+                    if (wide) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            title(Modifier.weight(1f))
+                            actions()
+                        }
+                    } else {
+                        title(Modifier.fillMaxWidth())
+                        actions()
+                    }
+                } else {
+                    title(Modifier.fillMaxWidth())
+                }
 
-                SectionTitle("Received")
-                SecureDropRows(lists.received, empty = "Nothing has been sent to you yet.", onOpenDrop, onDeleteDrop, ownedByMe = false)
+                when (keyState) {
+                    SecureDropKeyState.Loading -> Text("Loading…", style = CtosText.Small, color = CtosColors.TextMuted)
+                    SecureDropKeyState.None -> SecureDropKeySetupCard(
+                        keySetupState, pendingKeyPairFingerprint, onSetUpKeyPair, onRestartKeySetup, onEncryptAndSaveKey, onEditKeySetup,
+                    )
+                    is SecureDropKeyState.Ready -> {
+                        val main: @Composable (Modifier) -> Unit = { modifier ->
+                            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                                SectionTitle("Sent")
+                                SecureDropRows(lists.sent, empty = "Nothing sent yet.", onOpenDrop, onDeleteDrop, ownedByMe = true)
+
+                                SectionTitle("Received")
+                                SecureDropRows(lists.received, empty = "Nothing has been sent to you yet.", onOpenDrop, onDeleteDrop, ownedByMe = false)
+                            }
+                        }
+                        val side: @Composable (Modifier) -> Unit = { modifier ->
+                            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                                YourKeyCard(keyState, onShowFingerprint, onCopyKey, onRemoveKey)
+                                SendShortcutsCard(departments, onSend)
+                            }
+                        }
+                        if (wide) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
+                                main(Modifier.weight(2f))
+                                side(Modifier.weight(1f))
+                            }
+                        } else {
+                            main(Modifier.fillMaxWidth())
+                            side(Modifier.fillMaxWidth())
+                        }
+                    }
+                }
             }
         }
     }
@@ -243,8 +280,11 @@ private fun PassphraseStep(
     }
 }
 
+/** The fingerprint is truncated here — clicking it shows it in full in a dialog, the same as the website's own chip. */
 @Composable
-private fun YourKeyCard(state: SecureDropKeyState.Ready, onCopyKey: () -> Unit, onRemoveKey: () -> Unit) {
+private fun YourKeyCard(state: SecureDropKeyState.Ready, onShowFingerprint: () -> Unit, onCopyKey: () -> Unit, onRemoveKey: () -> Unit) {
+    val nowMillis = remember(state) { Clock.System.now().toEpochMilliseconds() }
+
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -253,9 +293,20 @@ private fun YourKeyCard(state: SecureDropKeyState.Ready, onCopyKey: () -> Unit, 
                 }
                 Text("Your key", style = CtosText.BodyStrong, color = CtosColors.Text)
             }
-            Text(state.fingerprint, style = CtosText.Mono, color = CtosColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Fingerprint", style = CtosText.Small, color = CtosColors.TextSubtle)
+                Text(
+                    state.fingerprint.take(16) + "…",
+                    style = CtosText.Mono,
+                    color = CtosColors.Text,
+                    maxLines = 1,
+                    modifier = Modifier.background(CtosColors.SurfaceAlt, CtosShapes.Small)
+                        .clickable(onClick = onShowFingerprint)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
             Text(
-                "Compare this fingerprint with someone out of band (a call, in person) before trusting a key you were not there to set up yourself.",
+                "Made ${formatTime(state.createdAtMillis, nowMillis)}. Compare this fingerprint with someone out of band (a call, in person) before trusting a key you were not there to set up yourself.",
                 style = CtosText.Caption,
                 color = CtosColors.TextSubtle,
             )
@@ -267,14 +318,32 @@ private fun YourKeyCard(state: SecureDropKeyState.Ready, onCopyKey: () -> Unit, 
     }
 }
 
+/** Quick shortcuts to a department's own send page — the header's "Send, encrypted" button (a dialog) is the other way in, same as the website's. */
+@Composable
+private fun SendShortcutsCard(departments: List<Department>, onSend: (Department) -> Unit) {
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Send one, encrypted", style = CtosText.BodyStrong, color = CtosColors.Text)
+            if (departments.isEmpty()) {
+                Text("Join a department to send to its members, or send by email.", style = CtosText.Small, color = CtosColors.TextMuted)
+            } else {
+                Text("Pick a department to send a file to its members who also have a Secure Drop key.", style = CtosText.Small, color = CtosColors.TextMuted)
+                Column {
+                    departments.forEach { department -> DepartmentRow(department, onSend) }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DepartmentRow(department: Department, onSend: (Department) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onSend(department) }.padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(department.name, style = CtosText.Small, color = CtosColors.Text, modifier = Modifier.weight(1f))
-        LinkButton("Send", onClick = { onSend(department) })
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = CtosColors.TextSubtle, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
@@ -303,7 +372,7 @@ private fun SecureDropRows(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(drop.name, style = CtosText.SmallStrong, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            drop.departmentName + if (ownedByMe) "" else " · from ${drop.ownerName}",
+                            (drop.departmentName ?: "Sent by email") + if (ownedByMe) "" else " · from ${drop.ownerName}",
                             style = CtosText.Caption,
                             color = CtosColors.TextSubtle,
                             maxLines = 1,
