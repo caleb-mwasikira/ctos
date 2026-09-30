@@ -140,13 +140,13 @@ class AppViewModelTest {
     }
 
     @Test
-    fun joiningNeedsADepartmentIdAndACode() {
+    fun joiningNeedsAnAccessCode() {
         signedIn()
         val viewModel = started()
         viewModel.openJoinDialog()
         assertTrue(viewModel.joinDialogOpen.value)
 
-        viewModel.join("engineering", " ")
+        viewModel.join(" ")
         assertIs<FormState.Failed>(viewModel.joinState.value)
 
         viewModel.closeJoinDialog()

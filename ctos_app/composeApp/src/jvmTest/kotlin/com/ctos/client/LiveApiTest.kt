@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  *   CTOS_TEST_API         http://127.0.0.1:9090/api/v1
  *   CTOS_TEST_EMAIL       a verified user
  *   CTOS_TEST_PASSWORD    that user's password
- *   CTOS_TEST_DEPARTMENT  the ID of a department the user has not joined yet
+ *   CTOS_TEST_DEPARTMENT  the slug of a department the user has not joined yet
  *   CTOS_TEST_CODE        that department's access code
  */
 class LiveApiTest {
@@ -36,6 +36,7 @@ class LiveApiTest {
         val password = System.getenv("CTOS_TEST_PASSWORD")
         val department = System.getenv("CTOS_TEST_DEPARTMENT")
         val code = System.getenv("CTOS_TEST_CODE")
+        assumeTrue("CTOS_TEST_DEPARTMENT is not set", department != null)
 
         var token: String? = null
         var expired = 0
@@ -52,10 +53,10 @@ class LiveApiTest {
         val before = api.getDepartments().getOrThrow()
         assertTrue(before.none { it.slug == department })
 
-        val wrong = api.joinDepartment(JoinRequest(department, "WRONG-CODE")).exceptionOrNull()
-        assertEquals("The department ID or access code is incorrect.", wrong?.message)
+        val wrong = api.joinDepartment(JoinRequest("WRONG-CODE")).exceptionOrNull()
+        assertEquals("That access code is incorrect.", wrong?.message)
 
-        val joined = api.joinDepartment(JoinRequest(department, code)).getOrThrow()
+        val joined = api.joinDepartment(JoinRequest(code)).getOrThrow()
         assertEquals(department, joined.slug)
         assertEquals("member", joined.role)
         assertTrue(api.getDepartments().getOrThrow().any { it.slug == department })

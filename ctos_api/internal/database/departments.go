@@ -68,18 +68,17 @@ func (db *Database) GetDepartmentOfUser(ctx context.Context, userID int64, depar
 	return department, err
 }
 
-// A department found by the ID people type when they join it.
+// A department found by its access code.
 type JoinableDepartment struct {
-	ID             int64
-	AccessCodeHash string // bcrypt; the plain code is never stored
+	ID int64
 }
 
-// GetDepartmentBySlug returns nil when there is no department with that ID. A
-// department's slug is its ID: it is unique across every organization.
-func (db *Database) GetDepartmentBySlug(ctx context.Context, slug string) (*JoinableDepartment, error) {
+// GetDepartmentByAccessCodeHash returns nil when no department has that code. hash is a SHA-256
+// hex digest (see handlers/departments.go's hashAccessCode): unlike a bcrypt hash, it can be
+// looked up by value, so joining only needs the code, not the department's slug too.
+func (db *Database) GetDepartmentByAccessCodeHash(ctx context.Context, hash string) (*JoinableDepartment, error) {
 	department := &JoinableDepartment{}
-	err := db.Pool.QueryRow(ctx, `select id, access_code from departments where slug = $1`, slug).
-		Scan(&department.ID, &department.AccessCodeHash)
+	err := db.Pool.QueryRow(ctx, `select id from departments where access_code = $1`, hash).Scan(&department.ID)
 	if notFound(err) {
 		return nil, nil
 	}
@@ -175,9 +174,10 @@ func (db *Database) GetEncryptedAccessCode(ctx context.Context, departmentID int
 	return encrypted, err
 }
 
-// SetAccessCode overwrites a department's access code: hash is what joining checks against next
-// (bcrypt, matching Department::acceptsAccessCode); encrypted is the copy managers can be shown
-// (Laravel's Crypt format, or nil to leave it unset — see accessCodeOf in handlers/departments.go).
+// SetAccessCode overwrites a department's access code: hash is what joining looks up and checks
+// against next (a SHA-256 hex digest, matching Department::hashAccessCode on the website);
+// encrypted is the copy managers can be shown (Laravel's Crypt format, or nil to leave it unset —
+// see accessCodeOf in handlers/departments.go).
 func (db *Database) SetAccessCode(ctx context.Context, departmentID int64, hash string, encrypted *string) error {
 	_, err := db.Pool.Exec(ctx, `update departments set access_code = $1, access_code_encrypted = $2, updated_at = now() where id = $3`,
 		hash, encrypted, departmentID)

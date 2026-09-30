@@ -252,7 +252,7 @@ it('does not let a locked member get back in with the access code', function (st
         : route('organizations.members.lock.store', [$this->organization, $member]);
     $this->actingAs($this->owner)->put($route);
 
-    $this->actingAs($member)->post(route('department-memberships.store'), ['department' => $this->department->slug, 'code' => 'ABCDE23456'])
+    $this->actingAs($member)->post(route('department-memberships.store'), ['code' => 'ABCDE23456'])
         ->assertSessionHasErrors('code');
 
     $this->actingAs($member)->get(route('departments.show', $this->department))->assertForbidden();

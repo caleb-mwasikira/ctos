@@ -95,9 +95,9 @@ class EndToEndTest {
 
             // 6. joining a department: a wrong code first, then the right one
             viewModel.openJoinDialog()
-            viewModel.join(department, "WRONG-CODE")
+            viewModel.join("WRONG-CODE")
             waitUntil(description = "the join refusal") { viewModel.joinState.value.toString().contains("incorrect") }
-            viewModel.join(department, code)
+            viewModel.join(code)
             waitUntil(description = "the department to open") {
                 viewModel.destination.value.screen == Screen.DepartmentDetail && viewModel.destination.value.departmentSlug == department
             }

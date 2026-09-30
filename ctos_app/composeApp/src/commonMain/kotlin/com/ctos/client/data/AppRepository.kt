@@ -88,8 +88,8 @@ object AppRepository {
 
     suspend fun fetchDepartments(): Result<List<Department>> = withContext(Dispatchers.IO) { api.getDepartments() }
 
-    suspend fun joinDepartment(department: String, code: String): Result<Department> = withContext(Dispatchers.IO) {
-        api.joinDepartment(JoinRequest(department.trim().lowercase(), code.trim()))
+    suspend fun joinDepartment(code: String): Result<Department> = withContext(Dispatchers.IO) {
+        api.joinDepartment(JoinRequest(code.trim()))
     }
 
     // ── organizations ──────────────────────────────────────────────────────

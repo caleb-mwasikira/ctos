@@ -369,14 +369,14 @@ class ScreenshotTest {
 
     @Test
     fun joinDialog() {
-        render("join-dialog", 520, 470) {
-            DialogCard("Join a department", onDismiss = {}, icon = Icons.Default.VpnKey, description = "Ask your team for the department ID and its access code.") {
-                JoinDepartmentForm(FormState.Idle, { _, _ -> }, {})
+        render("join-dialog", 520, 340) {
+            DialogCard("Join a department", onDismiss = {}, icon = Icons.Default.VpnKey, description = "Ask your team for its access code.") {
+                JoinDepartmentForm(FormState.Idle, {}, {})
             }
         }
-        render("join-dialog-error", 520, 520) {
-            DialogCard("Join a department", onDismiss = {}, icon = Icons.Default.VpnKey, description = "Ask your team for the department ID and its access code.") {
-                JoinDepartmentForm(FormState.Failed("The department ID or access code is incorrect."), { _, _ -> }, {})
+        render("join-dialog-error", 520, 390) {
+            DialogCard("Join a department", onDismiss = {}, icon = Icons.Default.VpnKey, description = "Ask your team for its access code.") {
+                JoinDepartmentForm(FormState.Failed("That access code is incorrect."), {}, {})
             }
         }
     }

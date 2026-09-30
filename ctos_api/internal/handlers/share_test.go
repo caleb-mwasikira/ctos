@@ -331,10 +331,10 @@ func TestRegeneratingTheAccessCodeReplacesTheOldOne(t *testing.T) {
 		t.Fatalf("want a %d-character code, got %q", accessCodeLength, code)
 	}
 
-	if status, _ := join(api, api.token(mustEmail(api, "outsider-for-code", true)), department.Slug, testAccessCode); status != http.StatusUnprocessableEntity {
+	if status, _ := join(api, api.token(mustEmail(api, "outsider-for-code", true)), department.Code); status != http.StatusUnprocessableEntity {
 		t.Errorf("the old code still worked, gave %d", status)
 	}
-	if status, _ := join(api, api.token(mustEmail(api, "newcomer-for-code", true)), department.Slug, code); status != http.StatusCreated {
+	if status, _ := join(api, api.token(mustEmail(api, "newcomer-for-code", true)), code); status != http.StatusCreated {
 		t.Errorf("the new code did not work, gave %d", status)
 	}
 }

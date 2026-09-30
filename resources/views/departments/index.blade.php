@@ -45,12 +45,11 @@
         @endif
     </section>
 
-    <x-modal id="join-department-dialog" title="Join a department" icon="key" :open="$errors->hasAny(['department', 'code'])"
-        description="Ask your team for the department ID and its access code.">
+    <x-modal id="join-department-dialog" title="Join a department" icon="key" :open="$errors->has('code')"
+        description="Ask your team for its access code.">
         <form method="POST" action="{{ route('department-memberships.store') }}" class="space-y-5">
             @csrf
-            <x-field name="department" label="Department ID" placeholder="engineering" required autofocus />
-            <x-field name="code" label="Access code" placeholder="K7M2Q9XP4T" autocomplete="off" class="font-mono uppercase tracking-widest" required />
+            <x-field name="code" label="Access code" placeholder="K7M2Q9XP4T" autocomplete="off" class="font-mono uppercase tracking-widest" required autofocus />
             <x-button class="w-full">Join department</x-button>
         </form>
     </x-modal>

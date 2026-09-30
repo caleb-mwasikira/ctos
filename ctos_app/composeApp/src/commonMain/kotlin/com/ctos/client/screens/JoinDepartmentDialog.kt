@@ -24,11 +24,11 @@ import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
 
-/** Joins a department with the ID shown on the website and its access code. */
+/** Joins the department whose access code this is. */
 @Composable
 fun JoinDepartmentDialog(
     state: FormState,
-    onSubmit: (departmentId: String, code: String) -> Unit,
+    onSubmit: (code: String) -> Unit,
     onEdit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -36,38 +36,31 @@ fun JoinDepartmentDialog(
         title = "Join a department",
         onDismiss = onDismiss,
         icon = Icons.Default.VpnKey,
-        description = "Ask your team for the department ID and its access code.",
+        description = "Ask your team for its access code.",
     ) {
         JoinDepartmentForm(state, onSubmit, onEdit)
     }
 }
 
-/** The fields and the button of the join dialog, without the popup around them. */
+/** The field and the button of the join dialog, without the popup around them. */
 @Composable
 fun JoinDepartmentForm(
     state: FormState,
-    onSubmit: (departmentId: String, code: String) -> Unit,
+    onSubmit: (code: String) -> Unit,
     onEdit: () -> Unit,
 ) {
-    var departmentId by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        AppTextField(
-            value = departmentId,
-            onValueChange = { departmentId = it; onEdit() },
-            label = "Department ID",
-            placeholder = "engineering",
-            autofocus = true,
-        )
         AppTextField(
             value = code,
             onValueChange = { code = it; onEdit() },
             label = "Access code",
             placeholder = "K7M2Q9XP4T",
             monospace = true,
+            autofocus = true,
             imeAction = ImeAction.Done,
-            onImeAction = { onSubmit(departmentId, code) },
+            onImeAction = { onSubmit(code) },
         )
         if (state is FormState.Failed) {
             Text(
@@ -77,6 +70,6 @@ fun JoinDepartmentForm(
                 modifier = Modifier.fillMaxWidth().background(CtosColors.DangerSoft, CtosShapes.Control).padding(12.dp),
             )
         }
-        PrimaryButton("Join department", onClick = { onSubmit(departmentId, code) }, modifier = Modifier.fillMaxWidth(), loading = state is FormState.Working)
+        PrimaryButton("Join department", onClick = { onSubmit(code) }, modifier = Modifier.fillMaxWidth(), loading = state is FormState.Working)
     }
 }

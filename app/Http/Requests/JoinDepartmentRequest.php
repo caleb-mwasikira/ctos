@@ -14,7 +14,6 @@ class JoinDepartmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'department' => ['required', 'string', 'max:100'],
             'code' => ['required', 'string', 'max:64'],
         ];
     }

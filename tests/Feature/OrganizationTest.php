@@ -203,7 +203,7 @@ it('lets the owner create a department, joins them as admin and shows the code o
 });
 
 it('never stores the access code in plain text', function () {
-    $department = Department::factory()->create();
+    $department = Department::factory()->create(['access_code' => 'ABCDE23456']);
 
     expect($department->getRawOriginal('access_code'))->not->toBe('ABCDE23456')
         ->and($department->acceptsAccessCode('ABCDE23456'))->toBeTrue();

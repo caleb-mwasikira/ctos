@@ -143,27 +143,27 @@ class CtosApiTest {
     }
 
     @Test
-    fun joiningSendsTheDepartmentIdAndCode() = runTest {
+    fun joiningSendsTheCode() = runTest {
         val recorder = Recorder()
         val api = api(recorder) {
             json(HttpStatusCode.Created, """{"data":{"id":4,"name":"Design Systems","slug":"design-systems","organization":{"id":3,"name":"Globex","slug":"globex"},"role":"member"}}""")
         }
 
-        val department = api.joinDepartment(JoinRequest("design-systems", "ABCDE23456")).getOrThrow()
+        val department = api.joinDepartment(JoinRequest("ABCDE23456")).getOrThrow()
 
         assertEquals("Design Systems", department.name)
         val request = recorder.requests.single()
         assertEquals("http://api.test/api/v1/departments/join", request.url.toString())
         val body = (request.body as TextContent).text
-        assertTrue(body.contains("\"department\":\"design-systems\"") && body.contains("\"code\":\"ABCDE23456\""), body)
+        assertTrue(body.contains("\"code\":\"ABCDE23456\""), body)
     }
 
     @Test
-    fun aWrongDepartmentIdOrCodeShowsTheSameMessage() = runTest {
-        val message = "The department ID or access code is incorrect."
+    fun aWrongAccessCodeShowsItsMessage() = runTest {
+        val message = "That access code is incorrect."
         val api = api { json(HttpStatusCode.UnprocessableEntity, """{"errors":{"code":["$message"]},"message":"$message"}""") }
 
-        assertEquals(message, api.joinDepartment(JoinRequest("nope", "x")).exceptionOrNull()!!.message)
+        assertEquals(message, api.joinDepartment(JoinRequest("x")).exceptionOrNull()!!.message)
     }
 
     @Test

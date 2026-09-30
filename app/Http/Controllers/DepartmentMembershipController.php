@@ -26,7 +26,6 @@ class DepartmentMembershipController extends Controller
     {
         $department = $joinDepartment->handle(
             $request->user(),
-            $request->validated('department'),
             $request->validated('code'),
         );
 

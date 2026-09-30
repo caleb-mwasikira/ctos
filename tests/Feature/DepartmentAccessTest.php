@@ -16,7 +16,6 @@ beforeEach(function () {
 function joinDepartment(mixed $test, User $user, array $overrides = [])
 {
     return $test->actingAs($user)->post(route('department-memberships.store'), [
-        'department' => 'engineering',
         'code' => 'ABCDE23456',
         ...$overrides,
     ]);
@@ -46,13 +45,13 @@ it('rejects a wrong access code', function () {
     expect($this->department->members()->count())->toBe(0);
 });
 
-it('gives the same error for an unknown department as for a wrong code', function () {
+it('gives the same error for a code nobody has as for a wrong one', function () {
     $user = User::factory()->create();
 
-    $message = 'The department ID or access code is incorrect.';
+    $message = 'That access code is incorrect.';
 
     joinDepartment($this, $user, ['code' => 'WRONGWRONG'])->assertSessionHasErrors(['code' => $message]);
-    joinDepartment($this, $user, ['department' => 'nope'])->assertSessionHasErrors(['code' => $message]);
+    joinDepartment($this, $user, ['code' => 'NOSUCHCODE'])->assertSessionHasErrors(['code' => $message]);
 });
 
 it('does not duplicate or downgrade an existing membership', function () {
@@ -148,14 +147,4 @@ it('lists a user\'s departments on the departments page', function () {
     $this->department->members()->attach($member->id, ['role' => DepartmentRole::Member->value]);
 
     $this->actingAs($member)->get(route('departments.index'))->assertOk()->assertSee($this->department->name);
-});
-
-it('joins with only the department ID and the access code', function () {
-    $user = User::factory()->create();
-
-    $this->actingAs($user)
-        ->post(route('department-memberships.store'), ['department' => 'engineering', 'code' => 'ABCDE23456'])
-        ->assertRedirect(route('departments.show', $this->department));
-
-    expect($this->department->members()->whereKey($user->id)->exists())->toBeTrue();
 });

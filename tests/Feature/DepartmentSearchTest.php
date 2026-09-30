@@ -120,7 +120,7 @@ it('reopens the join-department dialog when the access code is wrong', function 
     $page = $this->actingAs(User::factory()->create())
         ->from(route('departments.index'))
         ->followingRedirects()
-        ->post(route('department-memberships.store'), ['department' => 'nope', 'code' => 'WRONG']);
+        ->post(route('department-memberships.store'), ['code' => 'WRONG']);
 
     expect($page->getContent())->toMatch('/<dialog\s+id="join-department-dialog"[^>]*data-open/');
 });

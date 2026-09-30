@@ -81,7 +81,7 @@ See `internal/handlers/routes.go`.
 | `POST /api/v1/auth/forgot-password` | no | `{"email"}` — emails a 6-digit code if the address has an account; answers the same way either way |
 | `POST /api/v1/auth/reset-password` | no | `{"email", "code", "password", "password_confirmation"}` — sets the new password and signs every device out |
 | `GET /api/v1/departments` | yes | the departments the user belongs to, with their organization and the user's role |
-| `POST /api/v1/departments/join` | yes | `{"department", "code"}` — joins with the department ID and its access code |
+| `POST /api/v1/departments/join` | yes | `{"code"}` — joins the department that access code belongs to |
 | `GET /api/v1/organizations` | yes | organizations the user owns or belongs to, even ones with no departments yet |
 | `POST /api/v1/organizations` | yes | `{"name"}` — creates one, owned by the user, with a unique slug |
 | `GET /api/v1/departments/{department}` | yes | one department: members, `can_manage`; for managers also the access code, member emails and pending invitations |
@@ -137,10 +137,11 @@ organization (`department_user.locked_at`, `organization_locks`). A locked membe
 those departments in `GET /api/v1/departments`, is not subscribed to their WebSocket messages,
 and cannot get back in by joining with the access code again (`422`).
 
-A department ID is unique across all organizations, so joining needs only the ID and the
-access code. It fails with the same `422` message whether the department or the code is
-wrong, so IDs cannot be probed. Access codes are compared without regard to case
-or surrounding spaces.
+Joining needs only the access code: it is hashed with SHA-256 (not bcrypt — a random,
+high-entropy token does not need slow hashing, and this lets the department be found by the
+code's hash alone, the same way an API key is normally looked up). It fails with the same `422`
+message whether no department has that code or it just belongs to someone else, so codes cannot
+be probed. They are compared without regard to case or surrounding spaces.
 
 ### Files
 

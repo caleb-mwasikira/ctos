@@ -560,16 +560,16 @@ class AppViewModel : ViewModel() {
         if (_joinState.value is FormState.Failed) _joinState.value = FormState.Idle
     }
 
-    fun join(departmentId: String, code: String) {
+    fun join(code: String) {
         if (_joinState.value is FormState.Working) return
-        if (departmentId.isBlank() || code.isBlank()) {
-            _joinState.value = FormState.Failed("Enter the department ID and its access code.")
+        if (code.isBlank()) {
+            _joinState.value = FormState.Failed("Enter the access code.")
             return
         }
 
         _joinState.value = FormState.Working
         viewModelScope.launch {
-            AppRepository.joinDepartment(departmentId, code)
+            AppRepository.joinDepartment(code)
                 .onSuccess { department ->
                     val loaded = _departmentsState.value as? DepartmentsState.Loaded
                     _departmentsState.value = DepartmentsState.Loaded(

@@ -2,7 +2,7 @@
     <x-page-header
         title="Access code"
         :crumbs="['Dashboard' => route('dashboard'), $department->organization->name => route('organizations.show', $department->organization), $department->name => route('departments.show', $department)]"
-        subtitle="People join {{ $department->name }} from their dashboard with this code and its department ID."
+        subtitle="People join {{ $department->name }} from their dashboard with this code alone."
     />
 
     <x-card class="max-w-lg">

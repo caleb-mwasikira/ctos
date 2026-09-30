@@ -15,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 #[Fillable(['organization_id', 'name', 'slug', 'access_code'])]
@@ -33,15 +32,16 @@ class Department extends Model
     private const ACCESS_CODE_LENGTH = 10;
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Assigning a plain code (`$department->access_code = 'ABCDE23456'`) stores [hashAccessCode]'s
+     * digest of it instead, the same way Laravel's own 'hashed' cast used to bcrypt it — except
+     * this digest can also be looked up by value (see [findByAccessCode]), which a bcrypt hash
+     * cannot.
      */
-    protected function casts(): array
+    protected function accessCode(): Attribute
     {
-        return [
-            'access_code' => 'hashed',
-        ];
+        return Attribute::make(
+            set: fn (string $value): string => self::hashAccessCode($value),
+        );
     }
 
     /**
@@ -135,8 +135,8 @@ class Department extends Model
     /**
      * Generate a new random access code and return it.
      *
-     * Its hash is what joining is checked against. An encrypted copy is kept as well,
-     * so admins can show and copy the code later.
+     * Its hash (see [hashAccessCode]) is what joining looks departments up by and checks against.
+     * An encrypted copy is kept as well, so admins can show and copy the code later.
      */
     public function regenerateAccessCode(): string
     {
@@ -156,13 +156,35 @@ class Department extends Model
 
     public function acceptsAccessCode(string $code): bool
     {
-        return Hash::check(Str::upper(trim($code)), $this->access_code);
+        return hash_equals($this->access_code, self::hashAccessCode($code));
+    }
+
+    /**
+     * The department whose access code this is, or null if no department has it.
+     *
+     * Joining used to also need the department's slug, since a code could only be checked
+     * against one already-known department (it was bcrypt'd, which cannot be looked up by
+     * value). [hashAccessCode] is a plain, deterministic digest instead — fine for a random,
+     * high-entropy token nobody has to memorize, the same way an API key is normally hashed for
+     * lookup rather than bcrypt'd — so the code alone now finds its own department.
+     */
+    public static function findByAccessCode(string $code): ?self
+    {
+        return static::where('access_code', self::hashAccessCode($code))->first();
+    }
+
+    /**
+     * SHA-256 of the normalized code (codes are shown in capitals, but typed in lower too).
+     */
+    private static function hashAccessCode(string $code): string
+    {
+        return hash('sha256', Str::upper(trim($code)));
     }
 
     /**
      * Build a slug that no other department uses, in any organization.
      *
-     * The slug is the department's ID: what people type, with the access code, to join it.
+     * The slug is the department's ID, used in its URLs.
      */
     public static function uniqueSlugFor(string $name): string
     {

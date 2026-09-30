@@ -5,30 +5,22 @@ namespace App\Actions;
 use App\Enums\DepartmentRole;
 use App\Models\Department;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class JoinDepartmentAction
 {
     /**
-     * Add the user to a department when the access code matches.
+     * Add the user to the department whose access code this is.
      *
-     * Every failure returns the same message so callers cannot probe which
-     * departments exist.
+     * Every failure returns the same message so callers cannot probe which codes are close.
      *
      * @throws ValidationException
      */
-    public function handle(User $user, string $departmentSlug, string $code): Department
+    public function handle(User $user, string $code): Department
     {
-        $department = Department::where('slug', $departmentSlug)->first();
+        $department = Department::findByAccessCode($code);
 
         if ($department === null) {
-            Hash::make($code);
-
-            throw $this->invalidCredentials();
-        }
-
-        if (! $department->acceptsAccessCode($code)) {
             throw $this->invalidCredentials();
         }
 
@@ -48,7 +40,7 @@ class JoinDepartmentAction
     private function invalidCredentials(): ValidationException
     {
         return ValidationException::withMessages([
-            'code' => 'The department ID or access code is incorrect.',
+            'code' => 'That access code is incorrect.',
         ]);
     }
 }

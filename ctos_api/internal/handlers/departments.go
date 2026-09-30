@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,26 +14,29 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/crypto/bcrypt"
 
 	"ctos_api/internal/database"
 	"ctos_api/internal/laravelcrypt"
 	"ctos_api/internal/mail"
 )
 
-// wrongAccessCode is the one answer for every way joining can fail (no such
-// department, wrong code), so nobody can find out which departments exist
-// by trying IDs.
-const wrongAccessCode = "The department ID or access code is incorrect."
-
-// A hash to compare against when the department does not exist, so that a
-// missing department takes as long to answer as a wrong code.
-var unusedAccessCodeHash, _ = bcrypt.GenerateFromPassword([]byte("unused"), 12)
+// wrongAccessCode is the one answer for every way joining can fail (no department has that
+// code), so nobody can find out which codes are close to a real one.
+const wrongAccessCode = "That access code is incorrect."
 
 // normalizeAccessCode: codes are shown in capitals, but typing them in lower
 // case or with spaces around them must work too.
 func normalizeAccessCode(code string) string {
 	return strings.ToUpper(strings.TrimSpace(code))
+}
+
+// hashAccessCode: a plain SHA-256 hex digest of the normalized code, matching
+// Department::hashAccessCode on the website — a deterministic digest (rather than bcrypt) is what
+// lets a department be found by its code alone, and is a normal way to store a high-entropy random
+// token nobody has to memorize, the same way an API key is usually hashed for lookup.
+func hashAccessCode(code string) string {
+	sum := sha256.Sum256([]byte(normalizeAccessCode(code)))
+	return hex.EncodeToString(sum[:])
 }
 
 // departmentResponse is how a department goes out in JSON.
@@ -68,25 +73,19 @@ func (app *App) listDepartments(w http.ResponseWriter, r *http.Request) {
 }
 
 // joinDepartment: POST /api/v1/departments/join
-// Body: {"department": "engineering", "code": "ABCDE23456"}
-// department is the department ID shown on the website; it is unique across all organizations.
+// Body: {"code": "ABCDE23456"}
+// The code alone finds its own department (see hashAccessCode); no separate department ID needed.
 func (app *App) joinDepartment(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*database.User)
 
 	var input struct {
-		Department string `json:"department"`
-		Code       string `json:"code"`
+		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Request body must be valid JSON."})
 		return
 	}
-	message := validateRequiredText("department", input.Department, 100)
-	if message != "" {
-		writeInvalid(w, "department", message)
-		return
-	}
-	message = validateRequiredText("code", input.Code, 64)
+	message := validateRequiredText("code", input.Code, 64)
 	if message != "" {
 		writeInvalid(w, "code", message)
 		return
@@ -99,18 +98,13 @@ func (app *App) joinDepartment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	department, err := app.DB.GetDepartmentBySlug(r.Context(), input.Department)
+	department, err := app.DB.GetDepartmentByAccessCodeHash(r.Context(), hashAccessCode(input.Code))
 	if err != nil {
 		log.Printf("join department: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server error."})
 		return
 	}
-	hash := unusedAccessCodeHash
-	if department != nil {
-		hash = []byte(department.AccessCodeHash)
-	}
-	codeIsRight := bcrypt.CompareHashAndPassword(hash, []byte(normalizeAccessCode(input.Code))) == nil
-	if department == nil || !codeIsRight {
+	if department == nil {
 		app.JoinFailures.add(userKey)
 		writeInvalid(w, "code", wrongAccessCode)
 		return
@@ -430,12 +424,7 @@ func (app *App) regenerateAccessCode(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server error."})
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("regenerate access code: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server error."})
-		return
-	}
+	hash := hashAccessCode(code)
 
 	var encrypted *string
 	if app.Config.AppKey != "" {
@@ -448,7 +437,7 @@ func (app *App) regenerateAccessCode(w http.ResponseWriter, r *http.Request) {
 		encrypted = &value
 	}
 
-	if err := app.DB.SetAccessCode(r.Context(), department.ID, string(hash), encrypted); err != nil {
+	if err := app.DB.SetAccessCode(r.Context(), department.ID, hash, encrypted); err != nil {
 		log.Printf("regenerate access code: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server error."})
 		return

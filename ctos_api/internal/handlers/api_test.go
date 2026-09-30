@@ -120,17 +120,21 @@ func (api *testAPI) organization(ownerID int64) int64 {
 type testDepartment struct {
 	ID   int64
 	Slug string
+	// Code is unique per department: access_code is looked up by value now (see
+	// GetDepartmentByAccessCodeHash), so two departments can no longer share testAccessCode the
+	// way they could when it was bcrypt'd and checked one department at a time.
+	Code string
 }
 
 func (api *testAPI) department(organizationID int64, name string) testDepartment {
 	api.t.Helper()
 	api.count++
 	slug := fmt.Sprintf("dept-%d-%s", api.count, api.suffix)
-	hash, _ := bcrypt.GenerateFromPassword([]byte(testAccessCode), 4)
+	code := fmt.Sprintf("%s%d%s", testAccessCode, api.count, api.suffix)
 	id := api.insertID(`
 		insert into departments (organization_id, name, slug, access_code, created_at, updated_at)
-		values ($1, $2, $3, $4, now(), now()) returning id`, organizationID, name, slug, string(hash))
-	return testDepartment{ID: id, Slug: slug}
+		values ($1, $2, $3, $4, now(), now()) returning id`, organizationID, name, slug, hashAccessCode(code))
+	return testDepartment{ID: id, Slug: slug, Code: code}
 }
 
 func (api *testAPI) member(departmentID int64, userID int64, role string, locked bool) {
@@ -353,18 +357,18 @@ func TestLockedMembershipsAreHidden(t *testing.T) {
 
 // ── joining ────────────────────────────────────────────────────────────────
 
-func join(api *testAPI, token string, department string, code string) (int, map[string]any) {
-	return api.do("POST", "/api/v1/departments/join", token, map[string]any{"department": department, "code": code})
+func join(api *testAPI, token string, code string) (int, map[string]any) {
+	return api.do("POST", "/api/v1/departments/join", token, map[string]any{"code": code})
 }
 
-func TestJoinNeedsOnlyTheDepartmentIDAndTheCode(t *testing.T) {
+func TestJoinNeedsOnlyTheCode(t *testing.T) {
 	api := newTestAPI(t)
 	ownerID, _ := api.user("owner", true)
 	_, email := api.user("bob", true)
 	department := api.department(api.organization(ownerID), "Engineering")
 	token := api.token(email)
 
-	status, body := join(api, token, department.Slug, " abcde23456 ")
+	status, body := join(api, token, " "+strings.ToLower(department.Code)+" ")
 	if status != http.StatusCreated {
 		t.Fatalf("join gave %d: %v", status, body)
 	}
@@ -377,21 +381,21 @@ func TestJoinNeedsOnlyTheDepartmentIDAndTheCode(t *testing.T) {
 	}
 }
 
-func TestJoinGivesTheSameAnswerForAWrongIDAndAWrongCode(t *testing.T) {
+func TestJoinGivesTheSameAnswerForAWrongCodeAndOneNobodyHas(t *testing.T) {
 	api := newTestAPI(t)
 	ownerID, _ := api.user("owner", true)
 	_, email := api.user("bob", true)
-	department := api.department(api.organization(ownerID), "Engineering")
+	api.department(api.organization(ownerID), "Engineering")
 	token := api.token(email)
 
-	wrongCodeStatus, wrongCode := join(api, token, department.Slug, "WRONGWRONG")
-	wrongIDStatus, wrongID := join(api, token, "no-such-department", testAccessCode)
+	wrongCodeStatus, wrongCode := join(api, token, "WRONGWRONG")
+	unknownCodeStatus, unknownCode := join(api, token, "NOSUCHCODE1")
 
-	if wrongCodeStatus != http.StatusUnprocessableEntity || wrongIDStatus != http.StatusUnprocessableEntity {
-		t.Fatalf("both should be 422, got %d and %d", wrongCodeStatus, wrongIDStatus)
+	if wrongCodeStatus != http.StatusUnprocessableEntity || unknownCodeStatus != http.StatusUnprocessableEntity {
+		t.Fatalf("both should be 422, got %d and %d", wrongCodeStatus, unknownCodeStatus)
 	}
-	if wrongCode["message"] != wrongID["message"] || wrongCode["message"] != "The department ID or access code is incorrect." {
-		t.Errorf("the answers must be identical, got %q and %q", wrongCode["message"], wrongID["message"])
+	if wrongCode["message"] != unknownCode["message"] || wrongCode["message"] != "That access code is incorrect." {
+		t.Errorf("the answers must be identical, got %q and %q", wrongCode["message"], unknownCode["message"])
 	}
 }
 
@@ -401,7 +405,7 @@ func TestJoinKeepsAnExistingRole(t *testing.T) {
 	department := api.department(api.organization(ownerID), "Engineering")
 	api.member(department.ID, ownerID, "admin", false)
 
-	status, body := join(api, api.token(ownerEmail), department.Slug, testAccessCode)
+	status, body := join(api, api.token(ownerEmail), department.Code)
 	if status != http.StatusCreated || body["data"].(map[string]any)["role"] != "admin" {
 		t.Errorf("an admin joining again must stay an admin, got %d %v", status, body)
 	}
@@ -415,11 +419,11 @@ func TestJoinLocksAfterFiveWrongCodes(t *testing.T) {
 	token := api.token(email)
 
 	for attempt := 1; attempt <= 5; attempt++ {
-		if status, _ := join(api, token, department.Slug, "WRONGWRONG"); status != http.StatusUnprocessableEntity {
+		if status, _ := join(api, token, "WRONGWRONG"); status != http.StatusUnprocessableEntity {
 			t.Fatalf("attempt %d gave %d, want 422", attempt, status)
 		}
 	}
-	if status, _ := join(api, token, department.Slug, testAccessCode); status != http.StatusTooManyRequests {
+	if status, _ := join(api, token, department.Code); status != http.StatusTooManyRequests {
 		t.Errorf("further tries must be refused, even with the right code, got %d", status)
 	}
 }
@@ -438,7 +442,7 @@ func TestLockedMembersCannotJoinTheirWayBackIn(t *testing.T) {
 			}
 			token := api.token(email)
 
-			status, body := join(api, token, department.Slug, testAccessCode)
+			status, body := join(api, token, department.Code)
 			if status != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["message"]), "locked") {
 				t.Errorf("want 422 with a message about the lock, got %d %v", status, body)
 			}

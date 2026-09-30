@@ -70,8 +70,7 @@ data class ResetPasswordRequest(
 
 @Serializable
 data class JoinRequest(
-    /** The department ID shown on the website; unique across every organization. */
-    val department: String,
+    /** The access code alone finds its own department; no separate department ID needed. */
     val code: String,
 )
 

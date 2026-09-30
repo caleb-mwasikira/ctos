@@ -432,7 +432,7 @@ private fun MemberLine(member: DepartmentMember) {
 }
 
 @Composable
-private fun AccessCodeCard(department: Department, details: DepartmentDetails?, onCopy: (String) -> Unit, onGenerate: () -> Unit) {
+private fun AccessCodeCard(details: DepartmentDetails?, onCopy: (String) -> Unit, onGenerate: () -> Unit) {
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -457,20 +457,13 @@ private fun AccessCodeCard(department: Department, details: DepartmentDetails?, 
                             Text("Copy", style = CtosText.Caption, color = CtosColors.Primary)
                         }
                     }
-                    Text("People join from their dashboard with this code and the department ID below.", style = CtosText.Small, color = CtosColors.TextMuted)
+                    Text("People join from their dashboard with this code alone.", style = CtosText.Small, color = CtosColors.TextMuted)
                 }
                 else -> Text(
                     "This code was made before codes could be copied. Generate a new one on the website to see it here.",
                     style = CtosText.Small,
                     color = CtosColors.TextMuted,
                 )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Department ID", style = CtosText.Small, color = CtosColors.TextMuted)
-                Surface(onClick = { onCopy(department.slug) }, shape = CtosShapes.Pill, color = CtosColors.SurfaceAlt) {
-                    Text(department.slug, style = CtosText.Mono.copy(fontSize = CtosText.Small.fontSize), color = CtosColors.Text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
             }
 
             HorizontalDivider(color = CtosColors.Border)
@@ -525,8 +518,8 @@ fun DepartmentAccessCodeContent(department: Department?, details: DetailsState, 
             EmptyState(Icons.Default.Folder, "Department not found", "It may have been removed, or you no longer have access to it.")
             return@Page
         }
-        PageTitle("Access code", "People join ${department.name} from the app with this code and its department ID.")
-        AccessCodeCard(department, (details as? DetailsState.Loaded)?.details, onCopy, onGenerate)
+        PageTitle("Access code", "People join ${department.name} from the app with this code alone.")
+        AccessCodeCard((details as? DetailsState.Loaded)?.details, onCopy, onGenerate)
     }
 }
 
