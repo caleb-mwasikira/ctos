@@ -20,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Text
@@ -31,13 +30,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.ctos.client.BuildKonfig
 import com.ctos.client.data.FormState
 import com.ctos.client.screens.widgets.AppTextField
-import com.ctos.client.screens.widgets.IconTile
 import com.ctos.client.screens.widgets.LinkButton
+import com.ctos.client.screens.widgets.Logo
 import com.ctos.client.screens.widgets.PrimaryButton
 import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
@@ -83,10 +86,7 @@ private fun LoginForm(
         modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            IconTile(Icons.Default.Folder, size = 40.dp, filled = true)
-            Text("CTOS", style = CtosText.SectionTitle, color = CtosColors.Text)
-        }
+        Logo()
         Spacer(Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Welcome back", style = CtosText.PageTitle, color = CtosColors.Text)
@@ -129,9 +129,17 @@ private fun LoginForm(
     }
 }
 
+/** The dark, always-brand panel; the website's own version is two radial glows (top-right, bottom-left) over `bg-brand-950` — this is the same idea, in one gradient Compose can express directly. */
 @Composable
 private fun BrandPanel(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.background(CtosColors.Primary950), contentAlignment = Alignment.CenterStart) {
+    BoxWithConstraints(modifier = modifier.background(CtosColors.Primary950), contentAlignment = Alignment.CenterStart) {
+        val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
+        val glow = Brush.radialGradient(
+            colors = listOf(CtosColors.Primary600.copy(alpha = 0.55f), Color.Transparent),
+            center = Offset(widthPx * 0.9f, 0f),
+            radius = widthPx * 0.9f,
+        )
+        Box(modifier = Modifier.fillMaxSize().background(glow))
         Column(modifier = Modifier.padding(64.dp), verticalArrangement = Arrangement.spacedBy(36.dp)) {
             Text(
                 "One shared folder, on every machine.",

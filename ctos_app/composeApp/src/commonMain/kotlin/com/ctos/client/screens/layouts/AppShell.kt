@@ -1,7 +1,6 @@
 package com.ctos.client.screens.layouts
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,7 +21,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,10 +43,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ctos.client.data.Screen
 import com.ctos.client.screens.widgets.IconAction
+import com.ctos.client.screens.widgets.Logo
 import com.ctos.client.theme.CtosColors
-import ctosclient.composeapp.generated.resources.Res
-import ctosclient.composeapp.generated.resources.ctos_logo
-import org.jetbrains.compose.resources.painterResource
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
 
@@ -81,18 +77,19 @@ fun AppShell(
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(CtosColors.Canvas).windowInsetsPadding(WindowInsets.safeDrawing)) {
-        if (maxWidth >= 760.dp) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                Sidebar(current, userName, onNavigate)
-                VerticalDivider(modifier = Modifier.fillMaxHeight(), color = CtosColors.Border)
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    TopBar(title, canGoBack, onBack, onSearch, userName, userEmail, onLogout)
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) { content() }
+        val wide = maxWidth >= 760.dp
+        Column(modifier = Modifier.fillMaxSize()) {
+            // A full-width header above everything else, the same as the website's own <header>:
+            // the logo (or a back arrow and the screen's title, in its place, while inside one),
+            // search, and the account menu.
+            Header(title, canGoBack, onBack, onSearch, userName, userEmail, onLogout)
+            if (wide) {
+                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Sidebar(current, onNavigate)
+                    VerticalDivider(modifier = Modifier.fillMaxHeight(), color = CtosColors.Border)
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) { content() }
                 }
-            }
-        } else {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopBar(title, canGoBack, onBack, onSearch, userName, userEmail, onLogout)
+            } else {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) { content() }
                 BottomBar(current, onNavigate)
             }
@@ -100,26 +97,22 @@ fun AppShell(
     }
 }
 
+/** Nav links only — the logo and the account live in the header, the same split as `<x-nav-links>` in its own `<aside>`, under `app-layout.blade.php`'s header. */
 @Composable
-private fun Sidebar(current: Screen, userName: String, onNavigate: (Screen) -> Unit) {
+private fun Sidebar(current: Screen, onNavigate: (Screen) -> Unit) {
     Column(
-        modifier = Modifier.width(248.dp).fillMaxHeight().background(CtosColors.Surface).padding(16.dp),
+        modifier = Modifier.width(224.dp).fillMaxHeight().background(CtosColors.Canvas).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Image(
-            painter = painterResource(Res.drawable.ctos_logo),
-            contentDescription = "CTOS",
-            modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 20.dp).height(32.dp),
-        )
-
+        Spacer(Modifier.height(24.dp))
         navigationScreens.forEach { screen ->
             val selected = current.navigationRoot == screen
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (selected) CtosColors.Primary50 else CtosColors.Surface, CtosShapes.Control)
+                    .background(if (selected) CtosColors.Primary50 else CtosColors.Canvas, CtosShapes.Control)
                     .clickable { onNavigate(screen) }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -129,18 +122,17 @@ private fun Sidebar(current: Screen, userName: String, onNavigate: (Screen) -> U
                 Text(screen.title, style = if (selected) CtosText.BodyStrong else CtosText.Body, color = if (selected) CtosColors.PrimaryHover else CtosColors.TextMuted)
             }
         }
-
-        Spacer(Modifier.weight(1f))
-        HorizontalDivider(color = CtosColors.Border)
-        Row(modifier = Modifier.padding(top = 12.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Avatar(userName)
-            Text(userName, style = CtosText.SmallStrong, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 
+/**
+ * The header, full width above the sidebar and the page, the same as `app-layout.blade.php`'s
+ * own `<header>`: the logo on the left, search and the account menu on the right. Inside a
+ * screen reached by pushing (a detail page, a department's own sections), a back arrow and that
+ * screen's title stand in for the logo — the website's own equivalent is each page's breadcrumbs.
+ */
 @Composable
-private fun TopBar(
+private fun Header(
     title: String,
     canGoBack: Boolean,
     onBack: () -> Unit,
@@ -150,18 +142,19 @@ private fun TopBar(
     onLogout: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(64.dp).background(CtosColors.Surface).padding(horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth().height(64.dp).background(CtosColors.Surface).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (canGoBack) {
             IconAction(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+            Spacer(Modifier.width(4.dp))
+            Text(title, style = CtosText.SectionTitle, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         } else {
-            Spacer(Modifier.width(12.dp))
+            Logo()
+            Spacer(Modifier.weight(1f))
         }
-        Text(title, style = CtosText.SectionTitle, color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         IconAction(Icons.Default.Search, "Search", onSearch)
         ProfileMenu(userName, userEmail, onLogout)
-        Spacer(Modifier.width(4.dp))
     }
     HorizontalDivider(color = CtosColors.Border)
 }

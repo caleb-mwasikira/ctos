@@ -56,7 +56,7 @@ fun PrimaryButton(
         onClick = onClick,
         modifier = modifier.defaultMinSize(minHeight = 46.dp),
         enabled = enabled && !loading,
-        shape = CtosShapes.Control,
+        shape = CtosShapes.Field,
         contentPadding = ButtonPadding,
         colors = ButtonDefaults.buttonColors(
             containerColor = CtosColors.Primary,
@@ -81,7 +81,7 @@ fun SecondaryButton(
         onClick = onClick,
         modifier = modifier.defaultMinSize(minHeight = 46.dp),
         enabled = enabled,
-        shape = CtosShapes.Control,
+        shape = CtosShapes.Field,
         contentPadding = ButtonPadding,
         border = BorderStroke(1.dp, CtosColors.BorderStrong),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = CtosColors.Surface, contentColor = CtosColors.Text),
@@ -100,7 +100,7 @@ fun DangerButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.defaultMinSize(minHeight = 46.dp),
-        shape = CtosShapes.Control,
+        shape = CtosShapes.Field,
         contentPadding = ButtonPadding,
         border = BorderStroke(1.dp, CtosColors.DangerSoft),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = CtosColors.Surface, contentColor = CtosColors.Danger),

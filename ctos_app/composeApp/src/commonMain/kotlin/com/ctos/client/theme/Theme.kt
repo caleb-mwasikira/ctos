@@ -87,8 +87,12 @@ object CtosColors {
     var OnPrimary by mutableStateOf(LightPalette.onPrimary); private set
 
     // Fixed regardless of light/dark mode: the always-dark brand hero panel on the login screen
-    // is deliberately styled that way itself, not tied to the app's overall theme.
+    // is deliberately styled that way itself, not tied to the app's overall theme. Same for the
+    // logo's own icon tile, whose brand-500-to-brand-700 gradient the website never varies either.
     val Primary200 = Brand.S200
+    val Primary500 = Brand.S500
+    val Primary600 = Brand.S600
+    val Primary700 = Brand.S700
     val Primary800 = Brand.S800
     val Primary950 = Brand.S950
 
@@ -127,10 +131,16 @@ object CtosColors {
     }
 }
 
-/** Corner radii. Cards are the largest; controls are a step smaller. */
+/**
+ * Corner radii, matching the website's own Tailwind scale exactly: cards and dialogs are
+ * `rounded-2xl` (16px), an icon tile / drop zone / prominent search bar is `rounded-xl` (12px),
+ * and a button or a text field is `rounded-lg` (8px) — the website's own [Field] radius for both,
+ * even though Material calls one a button "shape" and the other a text field "shape".
+ */
 object CtosShapes {
     val Card = RoundedCornerShape(16.dp)
     val Control = RoundedCornerShape(12.dp)
+    val Field = RoundedCornerShape(8.dp)
     val Small = RoundedCornerShape(8.dp)
     val Pill = RoundedCornerShape(50)
 }
@@ -188,11 +198,12 @@ private val CtosTypography = Typography(
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    // Always dark, matching the website's own dark: palette, the same way it would look with the
-    // OS set to dark mode — not tied to system detection: Compose Desktop's isSystemInDarkTheme()
-    // does not reliably read the actual OS setting on every platform (notably Linux desktops),
-    // so a build that depended on it could silently stay light no matter what the system said.
-    CtosColors.useDark(true)
+    // Always light: the website's own default (its dark: classes only apply under an OS dark
+    // preference), so this is what matches it for the person actually looking at the screen most
+    // of the time. Not tied to system detection: Compose Desktop's isSystemInDarkTheme() does not
+    // reliably read the actual OS setting on every platform (notably Linux desktops), so a build
+    // that depended on it could silently show the wrong one no matter what the system said.
+    CtosColors.useDark(false)
 
     val colorScheme = darkColorScheme(
         primary = CtosColors.Primary, onPrimary = CtosColors.OnPrimary,

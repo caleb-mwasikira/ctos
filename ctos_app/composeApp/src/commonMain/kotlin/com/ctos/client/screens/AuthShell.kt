@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,17 +26,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ctos.client.data.FormState
 import com.ctos.client.screens.widgets.IconAction
-import com.ctos.client.screens.widgets.IconTile
+import com.ctos.client.screens.widgets.Logo
 import com.ctos.client.theme.CtosColors
 import com.ctos.client.theme.CtosShapes
 import com.ctos.client.theme.CtosText
 
 /**
- * The plain dark backdrop every screen before sign-in shares (Login, create an account, forgot
- * password, confirm your email): white text on the app's own dark surface, centered in a narrow
- * column that scrolls, with the safe-drawing inset so the on-screen keyboard does not cover it.
- * Login keeps its own wider layout (it also shows the brand panel on a big window); the others
- * are short single-purpose forms, so this is all they need.
+ * The plain backdrop every screen before sign-in shares (Login, create an account, forgot
+ * password, confirm your email): the app's own surface color, centered in a narrow column that
+ * scrolls, with the safe-drawing inset so the on-screen keyboard does not cover it. Login keeps
+ * its own wider layout (it also shows the brand panel on a big window); the others are short
+ * single-purpose forms, so this is all they need.
  */
 @Composable
 fun AuthShell(onBack: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
@@ -59,10 +58,7 @@ fun AuthShell(onBack: (() -> Unit)? = null, content: @Composable ColumnScope.() 
 
 @Composable
 fun AuthHeader(title: String, subtitle: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        IconTile(Icons.Default.Folder, size = 40.dp, filled = true)
-        Text("CTOS", style = CtosText.SectionTitle, color = CtosColors.Text)
-    }
+    Logo()
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = CtosText.PageTitle, color = CtosColors.Text)

@@ -87,7 +87,7 @@ fun AppTextField(
             visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = if (isPassword) KeyboardType.Password else keyboardType, imeAction = imeAction),
             keyboardActions = KeyboardActions(onAny = { onImeAction?.invoke() }),
-            shape = CtosShapes.Control,
+            shape = CtosShapes.Field,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = CtosColors.Primary,
                 unfocusedBorderColor = CtosColors.BorderStrong,
