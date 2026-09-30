@@ -424,7 +424,7 @@ private fun MembersCard(details: DetailsState, canManage: Boolean, onRetry: () -
 private fun MemberLine(member: DepartmentMember) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(modifier = Modifier.size(36.dp).background(CtosColors.Primary100, CtosShapes.Pill), contentAlignment = Alignment.Center) {
-            Text(member.name.take(1).uppercase(), style = CtosText.SmallStrong, color = CtosColors.Primary800)
+            Text(member.name.take(1).uppercase(), style = CtosText.SmallStrong, color = CtosColors.PrimaryHover)
         }
         Text(member.name, style = CtosText.Small.copy(fontWeight = FontWeight.Medium), color = CtosColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         RoleBadge(member.departmentRole)

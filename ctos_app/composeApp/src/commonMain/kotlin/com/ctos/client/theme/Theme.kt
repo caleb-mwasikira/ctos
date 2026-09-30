@@ -198,12 +198,11 @@ private val CtosTypography = Typography(
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    // Always light: the website's own default (its dark: classes only apply under an OS dark
-    // preference), so this is what matches it for the person actually looking at the screen most
-    // of the time. Not tied to system detection: Compose Desktop's isSystemInDarkTheme() does not
-    // reliably read the actual OS setting on every platform (notably Linux desktops), so a build
-    // that depended on it could silently show the wrong one no matter what the system said.
-    CtosColors.useDark(false)
+    // Always dark: a deliberate choice for the app specifically, unlike the website (which
+    // defaults to light and only switches under an OS dark preference) — not tied to system
+    // detection either way, since Compose Desktop's isSystemInDarkTheme() does not reliably read
+    // the actual OS setting on every platform (notably Linux desktops).
+    CtosColors.useDark(true)
 
     val colorScheme = darkColorScheme(
         primary = CtosColors.Primary, onPrimary = CtosColors.OnPrimary,

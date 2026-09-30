@@ -144,7 +144,7 @@ private fun BrandPanel(modifier: Modifier = Modifier) {
             Text(
                 "One shared folder, on every machine.",
                 style = CtosText.Display,
-                color = CtosColors.Surface,
+                color = Color.White,
                 modifier = Modifier.widthIn(max = 460.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -166,7 +166,7 @@ private fun Bullet(icon: ImageVector, title: String, text: String) {
             androidx.compose.material3.Icon(icon, contentDescription = null, tint = CtosColors.Primary200)
         }
         Column(modifier = Modifier.widthIn(max = 380.dp)) {
-            Text(title, style = CtosText.BodyStrong, color = CtosColors.Surface)
+            Text(title, style = CtosText.BodyStrong, color = Color.White)
             Text(text, style = CtosText.Small, color = CtosColors.Primary200)
         }
     }
