@@ -5,11 +5,10 @@
         :subtitle="'To members of '.$department->name.' who have a Secure Drop key. Everything is encrypted on this device before it is sent.'"
     />
 
-    @if ($recipients->isEmpty())
+    @if ($members->isEmpty())
         <x-card class="flex flex-col items-center py-14 text-center">
             <span class="flex size-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800"><x-icon name="lock" class="size-7" /></span>
-            <h2 class="mt-5 text-lg font-semibold">Nobody here has a Secure Drop key yet</h2>
-            <p class="mt-2 max-w-sm text-sm text-slate-600 dark:text-slate-400">Ask the other members of {{ $department->name }} to set one up on the Secure Drop page, then come back.</p>
+            <h2 class="mt-5 text-lg font-semibold">Nobody is in this department yet</h2>
         </x-card>
     @else
         <x-card class="max-w-2xl">
@@ -32,21 +31,32 @@
 
                     <fieldset>
                         <legend class="block text-sm font-medium text-slate-700 dark:text-slate-300">Send to</legend>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Every member of {{ $department->name }}; only those with a Secure Drop key can be picked.</p>
                         <div class="mt-2 space-y-2">
-                            @foreach ($recipients as $recipient)
-                                <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm dark:border-slate-800">
-                                    <input
-                                        type="checkbox"
-                                        class="size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
-                                        data-recipient-id="{{ $recipient['id'] }}"
-                                        data-recipient-public-key="{{ $recipient['public_key'] }}"
-                                        {{ $recipient['id'] === auth()->id() ? 'checked disabled' : '' }}
-                                    >
-                                    <span class="min-w-0 flex-1">
-                                        <span class="block truncate font-medium">{{ $recipient['name'] }}{{ $recipient['id'] === auth()->id() ? ' (you)' : '' }}</span>
-                                        <span class="block truncate font-mono text-xs text-slate-400">{{ Str::substr($recipient['fingerprint'], 0, 16) }}…</span>
-                                    </span>
-                                </label>
+                            @foreach ($members as $member)
+                                @if ($member['has_key'])
+                                    <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm dark:border-slate-800">
+                                        <input
+                                            type="checkbox"
+                                            class="size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
+                                            data-recipient-id="{{ $member['id'] }}"
+                                            data-recipient-public-key="{{ $member['public_key'] }}"
+                                            {{ $member['id'] === auth()->id() ? 'checked disabled' : '' }}
+                                        >
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block truncate font-medium">{{ $member['name'] }}{{ $member['id'] === auth()->id() ? ' (you)' : '' }}</span>
+                                            <span class="block truncate font-mono text-xs text-slate-400">{{ Str::substr($member['fingerprint'], 0, 16) }}…</span>
+                                        </span>
+                                    </label>
+                                @else
+                                    <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-200 px-3.5 py-2.5 text-sm opacity-60 dark:border-slate-700">
+                                        <input type="checkbox" disabled class="size-4 rounded border-slate-300 dark:border-slate-700 dark:bg-slate-900">
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block truncate font-medium">{{ $member['name'] }}</span>
+                                            <span class="block truncate text-xs text-slate-400">No Secure Drop key yet</span>
+                                        </span>
+                                    </div>
+                                @endif
                             @endforeach
                         </div>
                     </fieldset>

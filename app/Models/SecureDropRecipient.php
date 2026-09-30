@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One person's own copy of a secure drop's AES key, RSA encrypted with their public key (see
- * docs/secure-drop.md). The owner of the drop always has one of these too, so they can open their
- * own upload back up.
+ * One person's own copy of a secure drop's AES key (see docs/secure-drop.md). Usually RSA
+ * encrypted with an account's own public key (`user_id` set); for someone with no account yet,
+ * it is instead encrypted with a one-time password emailed to them (`email` and `access_token`
+ * set, `user_id` null) — the only place in this feature the server ever sees a plaintext secret,
+ * since it is the one sending that email.
  */
-#[Fillable(['secure_drop_id', 'user_id', 'encrypted_key'])]
+#[Fillable(['secure_drop_id', 'user_id', 'email', 'encrypted_key', 'access_token'])]
 class SecureDropRecipient extends Model
 {
     protected $casts = [
@@ -26,5 +28,11 @@ class SecureDropRecipient extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** No account yet: opened with the one-time password emailed to `email`, via `access_token`, instead of a login. */
+    public function isPasswordProtected(): bool
+    {
+        return $this->user_id === null;
     }
 }

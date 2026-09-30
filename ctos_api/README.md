@@ -122,7 +122,9 @@ encrypted private key, and a file's already-encrypted bytes and already RSA-wrap
 one RSA operation it performs itself, `encryption-keys/challenge`, uses SHA-1 as OAEP's own
 padding hash (not a place SHA-1's known weaknesses apply) because the website's PHP has no way to
 ask `openssl_public_encrypt()` for a different one, and every device speaking this protocol has to
-agree on the one PHP is stuck with.
+agree on the one PHP is stuck with. Sending directly by email — to an account with a key, or to
+someone with none yet, protected with a one-time password and an invitation instead — is a
+website-only addition on top of the same tables; this API does not (yet) expose it.
 
 The owner of an organization can lock a member out of one department or out of the whole
 organization (`department_user.locked_at`, `organization_locks`). A locked member does not see

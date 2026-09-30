@@ -1,6 +1,6 @@
 <x-app-layout title="Secure Drop">
     <x-page-header title="Secure Drop" subtitle="Files encrypted on your own device before they leave it. Nobody but the people you pick — not even this server — can read them.">
-        @if ($hasKey && auth()->user()->departments->isNotEmpty())
+        @if ($hasKey)
             <x-slot:actions>
                 <x-button type="button" data-dialog-open="send-drop-dialog"><x-icon name="lock" class="size-4" /> Send, encrypted</x-button>
             </x-slot:actions>
@@ -87,7 +87,7 @@
                                     <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300"><x-icon name="lock" class="size-5" /></span>
                                     <span class="min-w-0 flex-1">
                                         <span class="block truncate font-medium">{{ $drop->name }}</span>
-                                        <span class="mt-0.5 block text-xs text-slate-500">{{ $drop->department->name }} · sent to {{ $drop->recipients->count() - 1 }} {{ Str::plural('person', $drop->recipients->count() - 1) }} · {{ \Illuminate\Support\Number::fileSize($drop->size, precision: 1) }}</span>
+                                        <span class="mt-0.5 block text-xs text-slate-500">{{ $drop->department?->name ?? 'Sent by email' }} · sent to {{ $drop->recipients->count() - 1 }} {{ Str::plural('person', $drop->recipients->count() - 1) }} · {{ \Illuminate\Support\Number::fileSize($drop->size, precision: 1) }}</span>
                                     </span>
                                     <button type="button" data-open-drop="{{ $drop->id }}" class="text-sm font-medium text-brand-600 hover:text-brand-500 dark:text-brand-300">Open</button>
                                     <form method="POST" action="{{ route('secure-drop.destroy', $drop) }}" onsubmit="return confirm('Delete &quot;{{ $drop->name }}&quot;? This cannot be undone.')">
@@ -114,7 +114,7 @@
                                     <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300"><x-icon name="lock" class="size-5" /></span>
                                     <span class="min-w-0 flex-1">
                                         <span class="block truncate font-medium">{{ $drop->name }}</span>
-                                        <span class="mt-0.5 block text-xs text-slate-500">{{ $drop->department->name }} · from {{ $drop->owner->name }} · {{ \Illuminate\Support\Number::fileSize($drop->size, precision: 1) }}</span>
+                                        <span class="mt-0.5 block text-xs text-slate-500">{{ $drop->department?->name ?? 'Sent by email' }} · from {{ $drop->owner->name }} · {{ \Illuminate\Support\Number::fileSize($drop->size, precision: 1) }}</span>
                                     </span>
                                     <button type="button" data-open-drop="{{ $drop->id }}" class="text-sm font-medium text-brand-600 hover:text-brand-500 dark:text-brand-300">Open</button>
                                 </div>
@@ -215,9 +215,9 @@
         </dialog>
     @endif
 
-    @if ($hasKey && auth()->user()->departments->isNotEmpty())
-        {{-- Opened by the "Send, encrypted" button above; which department decides who can receive it. --}}
-        <dialog id="send-drop-dialog" aria-label="Send, encrypted" class="m-auto w-full max-w-md rounded-2xl border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100">
+    @if ($hasKey)
+        {{-- Opened by the "Send, encrypted" button above: to a department's members, or directly by email. --}}
+        <dialog id="send-drop-dialog" aria-label="Send, encrypted" data-own-public-key="{{ auth()->user()->encryptionKey->public_key }}" class="m-auto w-full max-w-md rounded-2xl border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:bg-slate-900 dark:text-slate-100">
             <div class="p-6 sm:p-8">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex items-center gap-3">
@@ -226,17 +226,56 @@
                     </div>
                     <form method="dialog"><button class="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close"><x-icon name="x" class="size-5" /></button></form>
                 </div>
-                <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">To members of which department?</p>
-                <ul class="mt-4 space-y-2">
-                    @foreach (auth()->user()->departments as $department)
-                        <li>
-                            <a href="{{ route('secure-drop.create', $department) }}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-800">
-                                {{ $department->name }}
-                                <x-icon name="chevron-right" class="size-4 text-slate-400" />
-                            </a>
-                        </li>
-                    @endforeach
-                </ul>
+
+                <div class="mt-5 flex gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist">
+                    <button type="button" data-send-tab="department" class="flex-1 rounded-lg px-3 py-2 text-sm font-medium" aria-selected="true">To a department</button>
+                    <button type="button" data-send-tab="email" class="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 dark:text-slate-400" aria-selected="false">By email</button>
+                </div>
+
+                <div data-send-panel="department" class="mt-5">
+                    @if (auth()->user()->departments->isNotEmpty())
+                        <p class="text-sm text-slate-600 dark:text-slate-400">To members of which department?</p>
+                        <ul class="mt-4 space-y-2">
+                            @foreach (auth()->user()->departments as $department)
+                                <li>
+                                    <a href="{{ route('secure-drop.create', $department) }}" class="flex items-center justify-between rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-800">
+                                        {{ $department->name }}
+                                        <x-icon name="chevron-right" class="size-4 text-slate-400" />
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="text-sm text-slate-600 dark:text-slate-400">Join a department first, or send directly by email instead.</p>
+                    @endif
+                </div>
+
+                <div data-send-panel="email" class="mt-5 hidden">
+                    <form data-send-email-form class="space-y-5">
+                        @csrf
+                        <div>
+                            <label for="send-email-address" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Their email</label>
+                            <input id="send-email-address" type="email" required autocomplete="off" class="mt-1.5 block w-full rounded-lg border-0 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-brand-500 dark:bg-slate-900 dark:text-white dark:ring-slate-700">
+                            <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                Already has a {{ config('app.name') }} account and key? It goes straight to them, end-to-end. Otherwise, it is
+                                protected with a one-time password instead, emailed to them along with an invitation to create an account.
+                            </p>
+                        </div>
+                        <div>
+                            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300">File</span>
+                            <input type="file" class="hidden" data-send-email-file>
+                            <button type="button" data-send-email-choose-file class="mt-1.5 flex w-full items-center justify-center rounded-xl border-2 border-dashed border-slate-300 p-4 text-sm font-medium text-brand-600 hover:text-brand-500 dark:border-slate-700 dark:text-brand-300">
+                                <span data-send-email-file-label>Choose a file</span>
+                            </button>
+                        </div>
+                        <p data-send-email-error class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300"></p>
+                        <p data-send-email-progress class="hidden text-sm text-slate-500"></p>
+                        <x-button type="submit" class="w-full" data-send-email-submit>
+                            <span data-send-email-idle class="contents"><x-icon name="lock" class="size-4" /> Encrypt and send</span>
+                            <span data-send-email-busy class="hidden">Encrypting…</span>
+                        </x-button>
+                    </form>
+                </div>
             </div>
         </dialog>
     @endif

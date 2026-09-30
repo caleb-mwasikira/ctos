@@ -8,6 +8,10 @@ function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 }
 
+function currentUserId() {
+    return document.querySelector('meta[name="user-id"]')?.content ?? '';
+}
+
 async function postJson(url, body) {
     const response = await fetch(url, {
         method: 'POST',
@@ -303,6 +307,160 @@ if (sendForm) {
             busy.classList.add('hidden');
             submit.disabled = false;
             progress.classList.add('hidden');
+        }
+    });
+}
+
+// ── sending directly by email, not scoped to a department ─────────────────────
+//
+// Whoever the address belongs to decides how: an account with its own Secure Drop key gets the
+// usual end-to-end treatment; anyone else gets a one-time password instead, emailed to them along
+// with an invitation to set up their own key. Generating and using that password is the one
+// place in this whole feature the server sees a plaintext secret — it has to, to email it.
+
+const sendDropDialog = document.getElementById('send-drop-dialog');
+
+if (sendDropDialog) {
+    sendDropDialog.querySelectorAll('[data-send-tab]').forEach((tab) => {
+        tab.addEventListener('click', () => {
+            sendDropDialog.querySelectorAll('[data-send-tab]').forEach((other) => {
+                const selected = other === tab;
+                other.setAttribute('aria-selected', String(selected));
+                other.classList.toggle('bg-white', selected);
+                other.classList.toggle('dark:bg-slate-900', selected);
+                other.classList.toggle('shadow-sm', selected);
+                other.classList.toggle('text-slate-500', !selected);
+                other.classList.toggle('dark:text-slate-400', !selected);
+            });
+            sendDropDialog.querySelectorAll('[data-send-panel]').forEach((panel) => {
+                panel.classList.toggle('hidden', panel.dataset.sendPanel !== tab.dataset.sendTab);
+            });
+        });
+    });
+    sendDropDialog.querySelector('[data-send-tab="department"]')?.classList.add('bg-white', 'dark:bg-slate-900', 'shadow-sm');
+
+    const emailForm = sendDropDialog.querySelector('[data-send-email-form]');
+    let selectedFile = null;
+
+    const fileInput = emailForm.querySelector('[data-send-email-file]');
+    const fileLabel = emailForm.querySelector('[data-send-email-file-label]');
+    emailForm.querySelector('[data-send-email-choose-file]').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        selectedFile = fileInput.files[0] ?? null;
+        fileLabel.textContent = selectedFile ? selectedFile.name : 'Choose a file';
+    });
+
+    emailForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const errorBox = emailForm.querySelector('[data-send-email-error]');
+        const progress = emailForm.querySelector('[data-send-email-progress]');
+        const idle = emailForm.querySelector('[data-send-email-idle]');
+        const busy = emailForm.querySelector('[data-send-email-busy]');
+        const submit = emailForm.querySelector('[data-send-email-submit]');
+        const email = emailForm.querySelector('#send-email-address').value.trim();
+        errorBox.classList.add('hidden');
+
+        try {
+            if (!email) {
+                throw new Error('Enter an email address.');
+            }
+            if (!selectedFile) {
+                throw new Error('Choose a file.');
+            }
+
+            idle.classList.add('hidden');
+            busy.classList.remove('hidden');
+            submit.disabled = true;
+            progress.textContent = 'Looking up that email…';
+            progress.classList.remove('hidden');
+
+            const lookup = await postJson('/secure-drop/lookup', { email });
+
+            progress.textContent = `Encrypting ${selectedFile.name}…`;
+            const { ciphertext, iv, rawKey } = await sdc.encryptFile(await selectedFile.arrayBuffer());
+
+            const ownPublicKey = await sdc.importPublicKeyPem(sendDropDialog.dataset.ownPublicKey);
+            const ownWrappedKey = await sdc.wrapAesKeyFor(ownPublicKey, rawKey);
+
+            const body = new FormData();
+            body.append('_token', csrfToken());
+            body.append('name', selectedFile.name);
+            body.append('iv', iv);
+            body.append('ciphertext', new Blob([ciphertext]), 'ciphertext');
+            body.append('recipients[0][user_id]', currentUserId());
+            body.append('recipients[0][encrypted_key]', ownWrappedKey);
+
+            if (lookup.data.has_account) {
+                const theirPublicKey = await sdc.importPublicKeyPem(lookup.data.public_key);
+                const theirWrappedKey = await sdc.wrapAesKeyFor(theirPublicKey, rawKey);
+                body.append('recipients[1][user_id]', lookup.data.id);
+                body.append('recipients[1][encrypted_key]', theirWrappedKey);
+            } else {
+                const password = sdc.generatePassword();
+                const passwordWrappedKey = await sdc.wrapAesKeyWithPassword(rawKey, password);
+                body.append('password_recipient[email]', email);
+                body.append('password_recipient[encrypted_key]', passwordWrappedKey);
+                body.append('password', password);
+            }
+
+            progress.textContent = `Sending ${selectedFile.name}…`;
+            const response = await fetch('/secure-drop/send', { method: 'POST', headers: { Accept: 'application/json' }, body });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.errors ? Object.values(data.errors)[0][0] : `Could not send "${selectedFile.name}".`);
+            }
+
+            window.location.href = '/secure-drop';
+        } catch (error) {
+            errorBox.textContent = error.message || 'Could not send this. Check the fields and try again.';
+            errorBox.classList.remove('hidden');
+            idle.classList.remove('hidden');
+            busy.classList.add('hidden');
+            submit.disabled = false;
+            progress.classList.add('hidden');
+        }
+    });
+}
+
+// ── opening one sent to someone with no account, given the link from their email ──
+
+const sharedDrop = document.querySelector('[data-shared-drop]');
+
+if (sharedDrop) {
+    const errorBox = sharedDrop.querySelector('[data-shared-drop-error]');
+    const idle = sharedDrop.querySelector('[data-shared-drop-idle]');
+    const busy = sharedDrop.querySelector('[data-shared-drop-busy]');
+    const token = sharedDrop.dataset.sharedToken;
+
+    sharedDrop.querySelector('[data-shared-drop-submit]').addEventListener('click', async () => {
+        const password = sharedDrop.querySelector('#shared-drop-password').value;
+        errorBox.classList.add('hidden');
+
+        try {
+            idle.classList.add('hidden');
+            busy.classList.remove('hidden');
+
+            const meta = await (await fetch(`/secure-drop/shared/${token}/meta`, { headers: { Accept: 'application/json' } })).json();
+            const { name, iv, encrypted_key: encryptedKey } = meta.data;
+
+            const rawAesKey = await sdc.unwrapAesKeyWithPassword(encryptedKey, password);
+
+            const ciphertext = await (await fetch(`/secure-drop/shared/${token}/download`)).arrayBuffer();
+            const plain = await sdc.decryptFile(ciphertext, iv, rawAesKey);
+
+            const url = URL.createObjectURL(new Blob([plain]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = name;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            errorBox.textContent = error.message === 'Wrong password.' ? error.message : 'Could not open this file. Check the password and try again.';
+            errorBox.classList.remove('hidden');
+        } finally {
+            idle.classList.remove('hidden');
+            busy.classList.add('hidden');
         }
     });
 }

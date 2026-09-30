@@ -41,6 +41,13 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [NewPasswordController::class, 'store'])->name('password.update');
 });
 
+// Opening a Secure Drop sent to someone with no account yet (docs/secure-drop.md): the
+// unguessable token in the link does the job a login would, so this needs neither. Registered
+// ahead of the auth group's own /secure-drop/{secureDrop} so "shared" is never mistaken for an id.
+Route::get('/secure-drop/shared/{token}', [SecureDropController::class, 'showShared'])->name('secure-drop.shared.show');
+Route::get('/secure-drop/shared/{token}/meta', [SecureDropController::class, 'metaShared'])->name('secure-drop.shared.meta');
+Route::get('/secure-drop/shared/{token}/download', [SecureDropController::class, 'downloadShared'])->name('secure-drop.shared.download');
+
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [SessionController::class, 'destroy'])->name('logout');
 
@@ -121,6 +128,8 @@ Route::middleware('auth')->group(function () {
             ->name('secure-drop.keys.destroy');
 
         Route::get('/secure-drop', [SecureDropController::class, 'index'])->name('secure-drop.index');
+        Route::post('/secure-drop/lookup', [SecureDropController::class, 'lookup'])->name('secure-drop.lookup');
+        Route::post('/secure-drop/send', [SecureDropController::class, 'send'])->name('secure-drop.send');
         Route::get('/departments/{department}/secure-drop/create', [SecureDropController::class, 'create'])
             ->name('secure-drop.create');
         Route::post('/departments/{department}/secure-drop', [SecureDropController::class, 'store'])

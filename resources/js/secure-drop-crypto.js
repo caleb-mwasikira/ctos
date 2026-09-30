@@ -77,7 +77,12 @@ export async function fingerprintOfPublicKey(publicKey) {
     return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ── the encrypted private key envelope ───────────────────────────────────────
+// ── the passphrase-protected envelope (a private key, or someone's copy of a file's AES key) ──
+//
+// The same PBKDF2 + AES-GCM envelope wraps two different things under two different PEM labels:
+// a private key itself (someone's own Secure Drop key, protected with their passphrase) and, for
+// someone with no account yet, one file's AES key (protected with a one-time password instead —
+// see docs/secure-drop.md's "sending by email").
 
 async function deriveAesKeyFromPassphrase(passphrase, salt, iterations) {
     const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
@@ -90,12 +95,11 @@ async function deriveAesKeyFromPassphrase(passphrase, salt, iterations) {
     );
 }
 
-export async function encryptPrivateKey(privateKey, passphrase) {
-    const plainDer = new Uint8Array(await crypto.subtle.exportKey('pkcs8', privateKey));
+async function encryptBytesWithPassphrase(label, plainBytes, passphrase) {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const aesKey = await deriveAesKeyFromPassphrase(passphrase, salt, PBKDF2_ITERATIONS);
-    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plainDer));
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plainBytes));
 
     const envelope = new Uint8Array(1 + salt.length + 4 + iv.length + ciphertext.length);
     let offset = 0;
@@ -108,12 +112,12 @@ export async function encryptPrivateKey(privateKey, passphrase) {
     offset += iv.length;
     envelope.set(ciphertext, offset);
 
-    return wrapPem('CTOS ENCRYPTED PRIVATE KEY', envelope);
+    return wrapPem(label, envelope);
 }
 
 /** Throws (a message meant to be shown as-is) when the passphrase is wrong — AES-GCM's own tag check fails first. */
-export async function decryptPrivateKey(envelopePem, passphrase) {
-    const envelope = unwrapPem(envelopePem, 'CTOS ENCRYPTED PRIVATE KEY');
+async function decryptBytesWithPassphrase(label, envelopePem, passphrase, wrongPassphraseMessage) {
+    const envelope = unwrapPem(envelopePem, label);
     if (envelope.length < 1 + 16 + 4 + 12 + 16 || envelope[0] !== ENVELOPE_VERSION) {
         throw new Error('That does not look like a Secure Drop encrypted key.');
     }
@@ -128,14 +132,30 @@ export async function decryptPrivateKey(envelopePem, passphrase) {
     const ciphertext = envelope.slice(offset);
 
     const aesKey = await deriveAesKeyFromPassphrase(passphrase, salt, iterations);
-    let plainDer;
     try {
-        plainDer = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext));
+        return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext));
     } catch {
-        throw new Error('Wrong passphrase.');
+        throw new Error(wrongPassphraseMessage);
     }
+}
 
+export async function encryptPrivateKey(privateKey, passphrase) {
+    const plainDer = new Uint8Array(await crypto.subtle.exportKey('pkcs8', privateKey));
+    return encryptBytesWithPassphrase('CTOS ENCRYPTED PRIVATE KEY', plainDer, passphrase);
+}
+
+export async function decryptPrivateKey(envelopePem, passphrase) {
+    const plainDer = await decryptBytesWithPassphrase('CTOS ENCRYPTED PRIVATE KEY', envelopePem, passphrase, 'Wrong passphrase.');
     return crypto.subtle.importKey('pkcs8', plainDer, { name: 'RSA-OAEP', hash: 'SHA-1' }, true, ['decrypt']);
+}
+
+/** For someone with no account yet: a file's raw AES key, protected with a one-time password instead of a public key. */
+export async function wrapAesKeyWithPassword(rawAesKey, password) {
+    return encryptBytesWithPassphrase('CTOS PASSWORD PROTECTED KEY', new Uint8Array(rawAesKey), password);
+}
+
+export async function unwrapAesKeyWithPassword(envelopePem, password) {
+    return decryptBytesWithPassphrase('CTOS PASSWORD PROTECTED KEY', envelopePem, password, 'Wrong password.');
 }
 
 // ── proving possession of the private key (docs/secure-drop.md) ─────────────
@@ -171,4 +191,14 @@ export async function decryptFile(ciphertext, ivBase64, rawAesKey) {
     const key = await crypto.subtle.importKey('raw', rawAesKey, 'AES-GCM', false, ['decrypt']);
     const iv = base64ToBytes(ivBase64);
     return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+}
+
+// ── a one-time password, for someone with no account yet (docs/secure-drop.md) ──
+
+const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; // no 0/O/1/l/I
+
+/** 20 characters from a printable, unambiguous alphabet — plenty for a one-time, single-use secret. */
+export function generatePassword() {
+    const bytes = crypto.getRandomValues(new Uint8Array(20));
+    return Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]).join('');
 }

@@ -121,7 +121,7 @@ it('requires the sender to have their own key set up first', function () {
         ->assertForbidden();
 });
 
-it('only offers department members who have a Secure Drop key as recipients', function () {
+it('shows every department member, but only lets those with a Secure Drop key be picked', function () {
     $noKeyMember = User::factory()->create(['name' => 'No Key']);
     $this->department->members()->attach($noKeyMember->id, ['role' => DepartmentRole::Member->value]);
 
@@ -129,7 +129,9 @@ it('only offers department members who have a Secure Drop key as recipients', fu
         ->get(route('secure-drop.create', $this->department))
         ->assertOk()
         ->assertSee($this->recipient->name)
-        ->assertDontSee('No Key');
+        ->assertSee('No Key')
+        ->assertSee('No Secure Drop key yet')
+        ->assertDontSee($noKeyMember->encryptionKey?->public_key ?? 'never matches');
 });
 
 it('does not let an outsider send to a department they are not in', function () {
