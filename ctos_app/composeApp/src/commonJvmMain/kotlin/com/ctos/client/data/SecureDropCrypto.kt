@@ -8,6 +8,7 @@ import java.security.SecureRandom
 import java.security.spec.MGF1ParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
+import java.text.Normalizer
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -82,9 +83,18 @@ actual object SecureDropCrypto {
     // passphrase) and, for someone with no account yet, one file's AES key (protected with a
     // one-time password instead — see docs/secure-drop.md's "sending by email").
 
+    /**
+     * NFC-normalized first: the same passphrase can arrive as different Unicode code point
+     * sequences depending on where it was typed (an accented letter composed via a Linux/AWT dead
+     * key can come in decomposed — a base letter plus a combining mark — while a browser's own
+     * input handling normally composes it), and those encode to different bytes. Both this and
+     * secure-drop-crypto.js's deriveAesKeyFromPassphrase() normalize, so an envelope made on one
+     * platform still opens with "the same" passphrase typed on the other.
+     */
     private fun deriveAesKeyFromPassphrase(passphrase: String, salt: ByteArray, iterations: Int): SecretKeySpec {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(passphrase.toCharArray(), salt, iterations, 256)
+        val normalized = Normalizer.normalize(passphrase, Normalizer.Form.NFC)
+        val spec = PBEKeySpec(normalized.toCharArray(), salt, iterations, 256)
         return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
     }
 

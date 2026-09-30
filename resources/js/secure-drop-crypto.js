@@ -84,8 +84,14 @@ export async function fingerprintOfPublicKey(publicKey) {
 // someone with no account yet, one file's AES key (protected with a one-time password instead —
 // see docs/secure-drop.md's "sending by email").
 
+// NFC-normalized first: the same passphrase can arrive as different Unicode code point sequences
+// depending on where it was typed (an accented letter composed via a Linux/AWT dead key can come
+// in decomposed — a base letter plus a combining mark — while a browser's own input handling
+// normally composes it), and those encode to different bytes. Both this and SecureDropCrypto.kt's
+// deriveAesKeyFromPassphrase() normalize, so an envelope made on one platform still opens with
+// "the same" passphrase typed on the other.
 async function deriveAesKeyFromPassphrase(passphrase, salt, iterations) {
-    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
     return crypto.subtle.deriveKey(
         { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
         material,

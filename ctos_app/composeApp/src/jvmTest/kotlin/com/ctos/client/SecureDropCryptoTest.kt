@@ -65,6 +65,24 @@ class SecureDropCryptoTest {
     }
 
     @Test
+    fun `a passphrase opens its envelope whether typed pre-composed or as a decomposed dead-key sequence`() {
+        val pair = SecureDropCrypto.generateKeyPair()
+        // "café" as one browser (or one keyboard layout) would send it, vs. how a Linux dead-key
+        // sequence can send the same visual text: "e" followed by a combining acute accent rather
+        // than the single precomposed "é" character. Both must derive the same key.
+        val precomposed = "café-passphrase-é"
+        val decomposed = "café-passphrase-é"
+        assertNotEquals(precomposed, decomposed) // sanity: genuinely different code point sequences
+
+        val envelope = SecureDropCrypto.encryptPrivateKey(pair.privateKey, precomposed)
+        val recovered = SecureDropCrypto.decryptPrivateKey(envelope, decomposed)
+
+        val (ciphertext, iv, rawKey) = SecureDropCrypto.encryptFile("normalize me".toByteArray())
+        val wrapped = SecureDropCrypto.wrapAesKeyFor(pair.publicKeyPem, rawKey)
+        assertContentEquals("normalize me".toByteArray(), SecureDropCrypto.decryptFile(ciphertext, iv, SecureDropCrypto.unwrapAesKey(recovered, wrapped)))
+    }
+
+    @Test
     fun `an imported key pair behaves exactly like a generated one, for someone bringing their own`() {
         val generated = SecureDropCrypto.generateKeyPair()
         // Only this test needs the raw PKCS8 bytes (internal, same module): standing in for a
